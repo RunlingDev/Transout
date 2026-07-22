@@ -63,7 +63,7 @@ async function onSubmit() {
     } else {
       await auth.login(username.value, password.value)
     }
-    router.push('/')
+    router.push('/console')
   } catch {
     // 拦截器已提示
   } finally {
@@ -82,6 +82,12 @@ async function onSubmit() {
 }
 .login-card {
   width: 380px;
+}
+.login-card :deep(.n-form-item) {
+  margin-bottom: 20px;
+}
+.login-card :deep(.n-button) {
+  margin-top: 4px;
 }
 .brand {
   font-size: 28px;

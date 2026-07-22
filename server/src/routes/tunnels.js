@@ -4,6 +4,7 @@ const { db } = require('../db');
 const { requireAuth } = require('../middleware');
 const { canUseChannel } = require('../services/channelAccess');
 const { checkSourceAllowed } = require('../services/sourcePolicy');
+const { tcpCheck, publicCheck } = require('../services/tunnelTest');
 const runner = require('../services/runner');
 
 const router = express.Router();
@@ -46,9 +47,8 @@ function validateTunnel(req, body, channel) {
     }
   }
 
-  // 源站策略（按当前用户所在组）
-  const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.user.group_id);
-  const check = checkSourceAllowed(group, source_host, sp);
+  // 源站策略（聚合用户全部所属组）
+  const check = checkSourceAllowed(req.user, source_host, sp);
   if (!check.allowed) return { status: 403, error: check.reason };
   return null;
 }
@@ -61,8 +61,6 @@ function pickFields(body) {
     proto: body.proto,
     source_host: String(body.source_host).trim(),
     source_port: Number(body.source_port),
-    target_host: str(body.target_host),
-    target_port: num(body.target_port),
     remote_port: num(body.remote_port),
     subdomain: str(body.subdomain),
     domain: str(body.domain),
@@ -85,10 +83,10 @@ router.post('/', (req, res) => {
   const f = pickFields(body);
   const info = db.prepare(`
     INSERT INTO tunnels (name, channel_id, owner_id, proto, source_host, source_port,
-      target_host, target_port, remote_port, subdomain, domain)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      remote_port, subdomain, domain)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(f.name, channel.id, req.user.id, f.proto, f.source_host, f.source_port,
-      f.target_host, f.target_port, f.remote_port, f.subdomain, f.domain);
+      f.remote_port, f.subdomain, f.domain);
   res.status(201).json(getView(info.lastInsertRowid));
 });
 
@@ -96,7 +94,8 @@ router.put('/:id', (req, res) => {
   const t = db.prepare('SELECT * FROM tunnels WHERE id = ?').get(Number(req.params.id));
   if (!t) return res.status(404).json({ error: '隧道不存在' });
   if (!canManage(req.user, t)) return res.status(403).json({ error: '只能修改自己的隧道' });
-  if (t.enabled || t.status === 'running' || t.status === 'starting') {
+  // 仅运行/启动中禁止修改；异常（error）态进程已退出，允许修改后重新启动
+  if (t.status === 'running' || t.status === 'starting') {
     return res.status(400).json({ error: '隧道运行中，请先停止再修改' });
   }
 
@@ -108,10 +107,10 @@ router.put('/:id', (req, res) => {
   const f = pickFields(body);
   db.prepare(`
     UPDATE tunnels SET name = ?, channel_id = ?, proto = ?, source_host = ?, source_port = ?,
-      target_host = ?, target_port = ?, remote_port = ?, subdomain = ?, domain = ?
+      remote_port = ?, subdomain = ?, domain = ?
     WHERE id = ?`)
     .run(f.name, channel.id, f.proto, f.source_host, f.source_port,
-      f.target_host, f.target_port, f.remote_port, f.subdomain, f.domain, t.id);
+      f.remote_port, f.subdomain, f.domain, t.id);
   res.json(getView(t.id));
 });
 
@@ -134,8 +133,7 @@ router.post('/:id/start', (req, res) => {
   if (!channel) return res.status(400).json({ error: '隧道所属渠道不存在' });
   if (!channel.enabled) return res.status(400).json({ error: '该渠道已禁用' });
   if (!canUseChannel(req.user, channel.id)) return res.status(403).json({ error: '没有该渠道的使用权限' });
-  const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.user.group_id);
-  const check = checkSourceAllowed(group, t.source_host, t.source_port);
+  const check = checkSourceAllowed(req.user, t.source_host, t.source_port);
   if (!check.allowed) return res.status(403).json({ error: check.reason });
 
   runner.startTunnel(t);
@@ -148,6 +146,40 @@ router.post('/:id/stop', (req, res) => {
   if (!canManage(req.user, t)) return res.status(403).json({ error: '只能操作自己的隧道' });
   runner.stopTunnel(t);
   res.json(getView(t.id));
+});
+
+// 隧道详情（所有者或管理员）
+router.get('/:id', (req, res) => {
+  const t = getView(Number(req.params.id));
+  if (!t) return res.status(404).json({ error: '隧道不存在' });
+  if (!canManage(req.user, t)) return res.status(403).json({ error: '只能查看自己的隧道' });
+  res.json(t);
+});
+
+// 隧道日志末尾（所有者或管理员）
+router.get('/:id/log', (req, res) => {
+  const t = db.prepare('SELECT * FROM tunnels WHERE id = ?').get(Number(req.params.id));
+  if (!t) return res.status(404).json({ error: '隧道不存在' });
+  if (!canManage(req.user, t)) return res.status(403).json({ error: '只能查看自己的隧道' });
+  res.json({ log: runner.tailLog(runner.logFile(t.id), 8192) });
+});
+
+// 源站连通性测试（TCP 探测 + 时延）
+router.post('/:id/test/source', async (req, res) => {
+  const t = db.prepare('SELECT * FROM tunnels WHERE id = ?').get(Number(req.params.id));
+  if (!t) return res.status(404).json({ error: '隧道不存在' });
+  if (!canManage(req.user, t)) return res.status(403).json({ error: '只能操作自己的隧道' });
+  res.json(await tcpCheck(t.source_host, t.source_port));
+});
+
+// 穿透后公网端测试（含时延）
+router.post('/:id/test/public', async (req, res) => {
+  const t = db.prepare('SELECT * FROM tunnels WHERE id = ?').get(Number(req.params.id));
+  if (!t) return res.status(404).json({ error: '隧道不存在' });
+  if (!canManage(req.user, t)) return res.status(403).json({ error: '只能操作自己的隧道' });
+  const channel = db.prepare('SELECT * FROM channels WHERE id = ?').get(t.channel_id);
+  if (!channel) return res.status(400).json({ error: '隧道所属渠道不存在' });
+  res.json(await publicCheck(t, channel));
 });
 
 module.exports = router;

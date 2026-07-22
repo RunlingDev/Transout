@@ -24,7 +24,8 @@ export const useAuthStore = defineStore('auth', {
       this.setSession(data.token, data.user)
     },
     async fetchMe() {
-      this.user = await api.get('/auth/me')
+      const data = await api.get('/auth/me')
+      this.user = data.user
     },
     logout() {
       this.token = ''

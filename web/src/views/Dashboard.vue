@@ -40,7 +40,7 @@
 </template>
 
 <script setup>
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { NTag } from 'naive-ui'
 import api from '../api'
 import StatusDot from '../components/StatusDot.vue'
@@ -73,8 +73,8 @@ const columns = [
   }
 ]
 
-onMounted(async () => {
-  loading.value = true
+async function load(silent = false) {
+  if (!silent) loading.value = true
   try {
     const [t, c] = await Promise.all([api.get('/tunnels'), api.get('/channels')])
     tunnels.value = t
@@ -84,5 +84,15 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 每 5 秒静默刷新，页面隐藏时暂停
+let timer = null
+onMounted(() => {
+  load()
+  timer = setInterval(() => {
+    if (!document.hidden) load(true)
+  }, 5000)
 })
+onUnmounted(() => clearInterval(timer))
 </script>
