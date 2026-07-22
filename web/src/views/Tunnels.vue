@@ -100,7 +100,7 @@ const columns = [
     render: (row) =>
       h(
         NButton,
-        { text: true, type: 'primary', onClick: () => router.push(`/tunnels/${row.id}`) },
+        { text: true, type: 'primary', onClick: () => router.push({ name: 'tunnel-detail', params: { id: row.id } }) },
         { default: () => row.name }
       )
   },

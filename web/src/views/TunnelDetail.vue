@@ -3,7 +3,7 @@
     <div class="page-head">
       <div class="head-text">
         <div class="title">
-          <n-button text style="font-size: 24px; margin-right: 8px" @click="router.push('/tunnels')">←</n-button>
+          <n-button text style="font-size: 24px; margin-right: 8px" @click="router.push({ name: 'tunnels' })">←</n-button>
           {{ tunnel.name }}
         </div>
         <div class="desc">隧道详情与连通性测试</div>
@@ -121,7 +121,7 @@ async function load(silent = false) {
     tunnel.value = t
     channels.value = c
   } catch {
-    if (!silent) router.push('/tunnels')
+    if (!silent) router.push({ name: 'tunnels' })
   }
 }
 

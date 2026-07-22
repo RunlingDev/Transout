@@ -2,9 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
+  { path: '/', name: 'home', component: () => import('../views/Home.vue'), meta: { public: true } },
   { path: '/login', name: 'login', component: () => import('../views/Login.vue'), meta: { public: true } },
   {
-    path: '/',
+    path: '/console',
     component: () => import('../layouts/MainLayout.vue'),
     children: [
       { path: '', name: 'dashboard', component: () => import('../views/Dashboard.vue') },
@@ -28,7 +29,7 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (to.meta.public) {
-    if (auth.token && to.name === 'login') return { path: '/' }
+    if (auth.token && to.name === 'login') return { path: '/console' }
     return true
   }
   if (!auth.token) return { path: '/login' }
@@ -39,7 +40,7 @@ router.beforeEach(async (to) => {
       return { path: '/login' }
     }
   }
-  if (to.meta.admin && !auth.isAdmin) return { path: '/' }
+  if (to.meta.admin && !auth.isAdmin) return { path: '/console' }
   return true
 })
 

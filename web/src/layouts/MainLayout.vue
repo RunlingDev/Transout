@@ -23,6 +23,7 @@
       <n-layout-content class="content" :native-scrollbar="false">
         <router-view />
       </n-layout-content>
+      <n-layout-footer bordered class="footer">© {{ year }} RunlingDev</n-layout-footer>
     </n-layout>
   </n-layout>
 </template>
@@ -36,6 +37,8 @@ import { avatarUrl } from '../utils/avatar'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
+const year = new Date().getFullYear()
 
 const titles = {
   dashboard: '仪表盘',
@@ -120,5 +123,13 @@ function onUserSelect(key) {
 }
 .content {
   padding: 28px 32px;
+}
+.footer {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  opacity: 0.45;
 }
 </style>

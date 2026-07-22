@@ -63,7 +63,7 @@ async function onSubmit() {
     } else {
       await auth.login(username.value, password.value)
     }
-    router.push('/')
+    router.push('/console')
   } catch {
     // 拦截器已提示
   } finally {
