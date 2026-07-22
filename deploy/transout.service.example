@@ -1,0 +1,20 @@
+# Transout 后端 systemd unit 示例
+# 1. 修改 WorkingDirectory 与 User 为实际值
+# 2. cp 到 /etc/systemd/system/transout.service
+# 3. systemctl daemon-reload && systemctl enable --now transout
+
+[Unit]
+Description=Transout 内网穿透控制面板后端
+After=network.target
+
+[Service]
+Type=simple
+User=transout
+WorkingDirectory=/opt/transout/server
+Environment=PORT=7321
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
