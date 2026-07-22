@@ -35,6 +35,16 @@ make dev        # 开发模式：后端 :7321 + 前端 Vite :5173（/api 已代�
 
 ## 生产部署（sqlite + nginx）
 
+一键部署（构建前端、安装后端到 /opt/transout、生成 nginx 配置、注册并启用 systemd 服务）：
+
+```bash
+sudo bash deploy/install.sh                      # 全默认；--domain/--port/--web-root/--user 可覆盖
+sudo bash deploy/install.sh --domain example.com # 指定域名
+sudo bash deploy/install.sh --skip-nginx         # 只装后端 + systemd
+```
+
+手动部署：
+
 ```bash
 make start                        # 构建前端并后台启动后端（127.0.0.1:7321）
 sudo mkdir -p /var/www/transout
