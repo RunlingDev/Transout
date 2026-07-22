@@ -53,7 +53,7 @@
               <n-radio-button value="union">并集</n-radio-button>
               <n-radio-button value="intersection">交集</n-radio-button>
             </n-radio-group>
-            <div class="hint">属于多个白名单组时生效：并集=任一组放行即可；交集=每个组都必须放行</div>
+            <div class="hint">属于多个组时生效：并集=任一组允许即可；交集=所有组都允许才行（不限制=全集，黑名单=补集）</div>
           </div>
         </n-form-item>
         <n-form-item label="管理员">

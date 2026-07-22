@@ -1,8 +1,8 @@
-// 源站策略：按用户所属全部用户组聚合判定
+// 源站策略：每个用户组定义一个"允许集合"——
+//   不限制(none)=全集；白名单=名单集合；黑名单=名单的补集
+// 用户属于多个组时，按其 source_policy_combine 设置对各组允许集合作并集或交集：
+//   union=并集（任一组允许即可）；intersection=交集（所有组都允许才行）
 // 条目支持："host"、"host:port"、IPv4 CIDR、"*.suffix" 域名通配
-// 用户属于多个白名单组时，按其 source_policy_combine 设置合并：
-//   union=并集（任一白名单放行即可），intersection=交集（每个白名单组都必须放行）
-// 黑名单不受合并策略影响：命中任一黑名单组列表即拒绝
 const { db, getUserGroupIds } = require('../db');
 
 // IPv4 转 32 位整数，非法返回 null
@@ -51,7 +51,16 @@ function matchEntry(entry, host, port) {
   return hostMatch(entry, host);
 }
 
-// 检查源站是否放行（聚合用户全部所属组的策略），返回 {allowed, reason?}
+// 单组判定：源站是否落在该组的允许集合内
+function groupAllows(g, host, port, parseList) {
+  const list = parseList(g);
+  const matched = list.some((e) => matchEntry(e, host, port));
+  if (g.source_policy_mode === 'whitelist') return matched; // 白名单集合
+  if (g.source_policy_mode === 'blacklist') return !matched; // 黑名单的补集
+  return true; // 不限制=全集
+}
+
+// 检查源站是否放行（按用户设置对各组允许集合作并/交集），返回 {allowed, reason?}
 function checkSourceAllowed(user, host, port) {
   const gids = getUserGroupIds(user.id);
   const groups = gids.length
@@ -67,40 +76,25 @@ function checkSourceAllowed(user, host, port) {
     }
   };
 
-  const whitelistGroups = groups.filter((g) => g.source_policy_mode === 'whitelist');
-  const blacklistGroups = groups.filter((g) => g.source_policy_mode === 'blacklist');
-
-  if (whitelistGroups.length > 0) {
-    if (user.source_policy_combine === 'intersection') {
-      // 交集：每个白名单组的列表都必须各自命中
-      for (const g of whitelistGroups) {
-        const list = parseList(g);
-        if (list.length === 0) {
-          return { allowed: false, reason: `所在组「${g.name}」的源站白名单为空，交集策略下禁止所有源站` };
-        }
-        if (!list.some((e) => matchEntry(e, host, port))) {
-          return { allowed: false, reason: `源站 ${host}:${port} 不在所在组「${g.name}」的白名单内（交集策略需全部命中）` };
-        }
-      }
-    } else {
-      // 并集：命中任一白名单组的列表即可
-      const union = whitelistGroups.flatMap(parseList);
-      if (union.length === 0) {
-        return { allowed: false, reason: '所在组的源站白名单为空，禁止所有源站' };
-      }
-      if (!union.some((e) => matchEntry(e, host, port))) {
-        return { allowed: false, reason: `源站 ${host}:${port} 不在所在组的白名单内` };
-      }
-    }
+  if (groups.length === 0) {
+    return { allowed: false, reason: '用户不属于任何用户组，禁止所有源站' };
   }
 
-  for (const g of blacklistGroups) {
-    if (parseList(g).some((e) => matchEntry(e, host, port))) {
-      return { allowed: false, reason: `源站 ${host}:${port} 命中所在组「${g.name}」的黑名单` };
+  if (user.source_policy_combine === 'intersection') {
+    // 交集：所有组的允许集合都必须包含该源站
+    for (const g of groups) {
+      if (!groupAllows(g, host, port, parseList)) {
+        return { allowed: false, reason: `源站 ${host}:${port} 不被所在组「${g.name}」允许（交集策略需全部组允许）` };
+      }
     }
+    return { allowed: true };
   }
 
-  return { allowed: true };
+  // 并集：任一组的允许集合包含该源站即可
+  if (groups.some((g) => groupAllows(g, host, port, parseList))) {
+    return { allowed: true };
+  }
+  return { allowed: false, reason: `源站 ${host}:${port} 不被任何所在组允许` };
 }
 
 module.exports = { checkSourceAllowed };
