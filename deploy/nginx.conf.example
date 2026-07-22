@@ -1,0 +1,32 @@
+# Transout 前端站点 + API 反代示例
+# 1. make deploy WEB_ROOT=/var/www/transout  部署前端产物
+# 2. make start  启动后端 (默认 127.0.0.1:7321)
+# 3. 将本文件拷入 nginx 配置目录并重载 nginx
+
+server {
+    listen 80;
+    server_name transout.example.com;  # 改成你的域名或 _
+
+    root /var/www/transout;
+    index index.html;
+
+    # 前端单页应用路由回退
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 后端 API
+    location /api/ {
+        proxy_pass http://127.0.0.1:7321;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # 静态资源缓存
+    location /assets/ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+}

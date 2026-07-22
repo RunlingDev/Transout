@@ -1,0 +1,75 @@
+# Transout — 内网穿透资源控制面板
+
+管理需要从内网穿透到公网的资源：统一配置 frp / ngrok 穿透渠道，在其上建立隧道并控制启停，配合用户组权限与源站黑白名单进行访问控制。
+
+## 架构
+
+单仓库（monorepo），前后端目录隔离：
+
+- `web/` — 前端：Vue3 + Vite + Naive UI + Pinia + Vue Router（设计语言参照 Apple HIG）
+- `server/` — 后端：Node.js + Express + better-sqlite3，进程级管理 frpc / ngrok
+- `deploy/` — nginx 与 systemd 配置示例
+- `Makefile` — 安装、构建、开发、启动、部署入口
+
+数据全部落在 `server/data/`（SQLite 库、JWT 密钥、运行时配置、日志），已 gitignore。
+
+## 功能
+
+- **穿透渠道**：frp（frpc 客户端）与 ngrok 两种类型，支持多渠道；token/authtoken 存储脱敏回显；一键检测二进制可用性
+- **隧道控制**：配置源（内网 host:port）、渠道、协议（tcp/http/https）、公网端（remote_port 或 subdomain/domain），Switch 直接启停；异常时展示 last_error
+- **用户与用户组**：
+  - 管理员：全局渠道、用户、用户组、全部隧道的管理
+  - 自定义用户组：由管理员创建并分配成员
+  - 默认组：未分组用户的归属，不可删除
+  - 渠道授权：按用户组或用户暴露渠道，未授权用户对渠道不可见、不可用
+  - 源站控制：按用户组配置白名单/黑名单（支持 IP、CIDR、`*.域名`、可带 `:端口`）
+
+## 快速开始
+
+```bash
+make install    # 安装前后端依赖
+make dev        # 开发模式：后端 :7321 + 前端 Vite :5173（/api 已代理）
+```
+
+首次访问会引导创建管理员账号。
+
+## 生产部署（sqlite + nginx）
+
+```bash
+make start                        # 构建前端并后台启动后端（127.0.0.1:7321）
+sudo mkdir -p /var/www/transout
+sudo make deploy                  # 前端产物同步到 /var/www/transout
+# 参考 deploy/nginx.conf.example 配置 nginx 并重载
+```
+
+后端常驻也可使用 `deploy/transout.service.example`（systemd）。
+
+`make stop` / `make restart` / `make status` 管理后端进程。
+
+## frp / ngrok 二进制
+
+面板在「设置」中配置 `frpc`、`ngrok` 可执行文件路径（默认从 PATH 查找）。
+- frp：同一渠道下的启用隧道共用一个 frpc 进程，配置变更自动重写并重启
+- ngrok：每个启用隧道一个独立进程
+
+二进制缺失时隧道会进入「异常」状态并给出明确提示，不影响面板其余功能。
+
+## 分支模型（GitFlow）
+
+- `main`：发布分支，打 tag（如 v0.1.0）
+- `develop`：集成分支
+- `feature/*`：功能分支，完成后合并回 `develop`
+- `release/*`、`hotfix/*` 按 GitFlow 惯例使用
+
+## API 概览
+
+全部前缀 `/api`，JWT Bearer 认证，错误统一 `{error}`。
+
+| 模块 | 端点 |
+|---|---|
+| 认证 | `POST /auth/login`、`GET/POST /auth/bootstrap`、`GET /auth/me`、`PUT /auth/password` |
+| 用户 | `GET/POST /users`、`PUT/DELETE /users/:id`（管理员） |
+| 用户组 | `GET/POST /groups`、`PUT/DELETE /groups/:id` |
+| 渠道 | `GET/POST /channels`、`PUT/DELETE /channels/:id`、`POST /channels/:id/check` |
+| 隧道 | `GET/POST /tunnels`、`PUT/DELETE /tunnels/:id`、`POST /tunnels/:id/start|stop` |
+| 设置 | `GET/PUT /settings`（管理员） |
