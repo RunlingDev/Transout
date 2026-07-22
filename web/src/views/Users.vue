@@ -47,13 +47,13 @@
             placeholder="默认组"
           />
         </n-form-item>
-        <n-form-item label="多组白名单冲突策略">
+        <n-form-item label="多组冲突策略">
           <div class="combine-field">
             <n-radio-group v-model:value="form.source_policy_combine">
               <n-radio-button value="union">并集</n-radio-button>
               <n-radio-button value="intersection">交集</n-radio-button>
             </n-radio-group>
-            <div class="hint">属于多个组时生效：并集=任一组允许即可；交集=所有组都允许才行（不限制=全集，黑名单=补集）</div>
+            <div class="hint">属于多个组时生效。对于指定的源站，并集策略指任一组允许即可使用；交集策略指需所有组都允许才可使用</div>
           </div>
         </n-form-item>
         <n-form-item label="管理员">
@@ -135,7 +135,7 @@ const columns = [
         : '—'
   },
   {
-    title: '白名单冲突',
+    title: '多组冲突',
     key: 'source_policy_combine',
     width: 100,
     render: (row) => (row.source_policy_combine === 'intersection' ? '交集' : '并集')

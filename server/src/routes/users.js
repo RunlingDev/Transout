@@ -39,7 +39,7 @@ function validateGroupIds(groupIds) {
   return null;
 }
 
-// 多组白名单冲突时的合并策略（单用户级）
+// 多组冲突时的合并策略（单用户级）
 const COMBINE_MODES = ['union', 'intersection'];
 
 router.get('/', (req, res) => {
