@@ -18,6 +18,7 @@ function userView(u) {
     group_id: u.group_id,
     group_name: groups.length ? groups[0].name : null,
     groups,
+    source_policy_combine: u.source_policy_combine || 'union',
   };
 }
 

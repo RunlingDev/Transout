@@ -8,7 +8,7 @@ const router = express.Router();
 router.use(requireAdmin);
 
 const LIST_SQL = `
-  SELECT u.id, u.username, u.email, u.is_admin, u.group_id, g.name AS group_name, u.created_at
+  SELECT u.id, u.username, u.email, u.is_admin, u.group_id, u.source_policy_combine, g.name AS group_name, u.created_at
   FROM users u LEFT JOIN groups g ON g.id = u.group_id`;
 
 function userRow(id) {
@@ -39,6 +39,9 @@ function validateGroupIds(groupIds) {
   return null;
 }
 
+// 多组白名单冲突时的合并策略（单用户级）
+const COMBINE_MODES = ['union', 'intersection'];
+
 router.get('/', (req, res) => {
   const rows = db.prepare(`${LIST_SQL} ORDER BY u.id`).all();
   const gs = db.prepare(`
@@ -59,14 +62,18 @@ router.post('/', (req, res) => {
   if (!password || String(password).length < 6) return res.status(400).json({ error: '密码长度至少 6 位' });
   const eerr = validateEmail(email);
   if (eerr) return res.status(400).json({ error: eerr });
+  const combine = req.body.source_policy_combine === undefined ? 'union' : req.body.source_policy_combine;
+  if (!COMBINE_MODES.includes(combine)) {
+    return res.status(400).json({ error: 'source_policy_combine 必须是 union 或 intersection' });
+  }
   const groupIds = req.body.group_ids === undefined ? [1] : req.body.group_ids;
   const gerr = validateGroupIds(groupIds);
   if (gerr) return res.status(400).json({ error: gerr });
   if (db.prepare('SELECT id FROM users WHERE username = ?').get(username.trim())) {
     return res.status(409).json({ error: '用户名已存在' });
   }
-  const info = db.prepare('INSERT INTO users (username, password_hash, is_admin, email) VALUES (?, ?, ?, ?)')
-    .run(username.trim(), hashPassword(String(password)), is_admin ? 1 : 0, email || null);
+  const info = db.prepare('INSERT INTO users (username, password_hash, is_admin, email, source_policy_combine) VALUES (?, ?, ?, ?, ?)')
+    .run(username.trim(), hashPassword(String(password)), is_admin ? 1 : 0, email || null, combine);
   setUserGroups(info.lastInsertRowid, groupIds.length ? groupIds : [1]);
   res.status(201).json(userRow(info.lastInsertRowid));
 });
@@ -91,6 +98,12 @@ router.put('/:id', (req, res) => {
     const eerr = validateEmail(email);
     if (eerr) return res.status(400).json({ error: eerr });
     db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email || null, id);
+  }
+  if (req.body.source_policy_combine !== undefined) {
+    if (!COMBINE_MODES.includes(req.body.source_policy_combine)) {
+      return res.status(400).json({ error: 'source_policy_combine 必须是 union 或 intersection' });
+    }
+    db.prepare('UPDATE users SET source_policy_combine = ? WHERE id = ?').run(req.body.source_policy_combine, id);
   }
   if (req.body.group_ids !== undefined) {
     const gerr = validateGroupIds(req.body.group_ids);

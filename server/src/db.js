@@ -84,6 +84,7 @@ function addColumn(table, ddl) {
   }
 }
 addColumn('users', 'email TEXT');
+addColumn('users', "source_policy_combine TEXT NOT NULL DEFAULT 'union'");
 addColumn('tunnels', 'public_url TEXT');
 
 // 迁移：把 users.group_id 的既有归属写入 user_groups（多组成员表）

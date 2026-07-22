@@ -47,6 +47,15 @@
             placeholder="默认组"
           />
         </n-form-item>
+        <n-form-item label="多组白名单冲突策略">
+          <div class="combine-field">
+            <n-radio-group v-model:value="form.source_policy_combine">
+              <n-radio-button value="union">并集</n-radio-button>
+              <n-radio-button value="intersection">交集</n-radio-button>
+            </n-radio-group>
+            <div class="hint">属于多个白名单组时生效：并集=任一组放行即可；交集=每个组都必须放行</div>
+          </div>
+        </n-form-item>
         <n-form-item label="管理员">
           <n-switch v-model:value="form.is_admin" />
         </n-form-item>
@@ -78,7 +87,7 @@ const showModal = ref(false)
 const editing = ref(null)
 const formRef = ref(null)
 
-const form = reactive({ username: '', password: '', email: '', is_admin: false, group_ids: [] })
+const form = reactive({ username: '', password: '', email: '', is_admin: false, group_ids: [], source_policy_combine: 'union' })
 
 const groupOptions = computed(() => groups.value.map((g) => ({ label: g.name, value: g.id })))
 
@@ -124,6 +133,12 @@ const columns = [
               )
           })
         : '—'
+  },
+  {
+    title: '白名单冲突',
+    key: 'source_policy_combine',
+    width: 100,
+    render: (row) => (row.source_policy_combine === 'intersection' ? '交集' : '并集')
   },
   { title: '创建时间', key: 'created_at', render: (row) => formatTime(row.created_at) },
   {
@@ -177,7 +192,7 @@ async function load() {
 
 function openCreate() {
   editing.value = null
-  Object.assign(form, { username: '', password: '', email: '', is_admin: false, group_ids: [] })
+  Object.assign(form, { username: '', password: '', email: '', is_admin: false, group_ids: [], source_policy_combine: 'union' })
   showModal.value = true
 }
 
@@ -188,7 +203,8 @@ function openEdit(row) {
     password: '',
     email: row.email || '',
     is_admin: row.is_admin,
-    group_ids: (row.groups || []).map((g) => g.id)
+    group_ids: (row.groups || []).map((g) => g.id),
+    source_policy_combine: row.source_policy_combine || 'union'
   })
   showModal.value = true
 }
@@ -202,7 +218,12 @@ async function onSave() {
   saving.value = true
   try {
     if (editing.value) {
-      const payload = { is_admin: form.is_admin, email: form.email, group_ids: form.group_ids }
+      const payload = {
+        is_admin: form.is_admin,
+        email: form.email,
+        group_ids: form.group_ids,
+        source_policy_combine: form.source_policy_combine
+      }
       if (form.password) payload.password = form.password
       await api.put(`/users/${editing.value.id}`, payload)
     } else {
@@ -211,7 +232,8 @@ async function onSave() {
         password: form.password,
         email: form.email,
         is_admin: form.is_admin,
-        group_ids: form.group_ids
+        group_ids: form.group_ids,
+        source_policy_combine: form.source_policy_combine
       })
     }
     message.success('已保存')
@@ -257,5 +279,13 @@ onMounted(load)
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+.combine-field {
+  width: 100%;
+}
+.hint {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-top: 6px;
 }
 </style>
