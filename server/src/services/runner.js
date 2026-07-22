@@ -1,6 +1,7 @@
 // 隧道进程管理：frp 每渠道一个共享 frpc 进程，ngrok 每隧道一个进程
 const { spawn } = require('child_process');
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
 const { db, getSetting } = require('../db');
 const { DATA_DIR } = require('../config');
@@ -136,6 +137,36 @@ function restartFrpcChannel(channelId) {
   timer.unref();
 }
 
+// 轮询 ngrok 本地 agent API，取回公网地址并写入 tunnels.public_url
+function pollNgrokPublicUrl(tunnelId, agentPort, attempts = 20) {
+  if (attempts <= 0) return;
+  const req = http.get({ host: '127.0.0.1', port: agentPort, path: '/api/tunnels', timeout: 2000 }, (res) => {
+    let body = '';
+    res.on('data', (c) => { body += c; });
+    res.on('end', () => {
+      let url = '';
+      try {
+        const data = JSON.parse(body);
+        const t = (data.tunnels || []).find((x) => x.public_url && x.public_url.startsWith('https://'))
+          || (data.tunnels || [])[0];
+        url = t ? t.public_url : '';
+      } catch (e) { /* 忽略，重试 */ }
+      if (url) {
+        // 进程可能已被停止/替换，仅当仍在册时写库
+        if (ngrokProcs.has(tunnelId)) {
+          db.prepare('UPDATE tunnels SET public_url = ? WHERE id = ?').run(url, tunnelId);
+        }
+      } else {
+        setTimeout(() => pollNgrokPublicUrl(tunnelId, agentPort, attempts - 1), 500).unref();
+      }
+    });
+  });
+  req.on('error', () => {
+    setTimeout(() => pollNgrokPublicUrl(tunnelId, agentPort, attempts - 1), 500).unref();
+  });
+  req.on('timeout', () => req.destroy());
+}
+
 // ---- ngrok：每隧道独立进程 ----
 
 function startNgrokTunnel(tunnelId) {
@@ -147,7 +178,7 @@ function startNgrokTunnel(tunnelId) {
     return;
   }
 
-  const { yml, name } = renderNgrokConfig(channel, t);
+  const { yml, name, agentPort } = renderNgrokConfig(channel, t);
   const cfgPath = path.join(RUNTIME_DIR, `ngrok-${tunnelId}.yml`);
   fs.writeFileSync(cfgPath, yml);
 
@@ -158,6 +189,7 @@ function startNgrokTunnel(tunnelId) {
   });
   ngrokProcs.set(tunnelId, child);
   if (child.pid) db.prepare('UPDATE tunnels SET pid = ? WHERE id = ?').run(child.pid, tunnelId);
+  pollNgrokPublicUrl(tunnelId, agentPort);
 
   child.on('error', (err) => {
     if (ngrokProcs.get(tunnelId) === child) ngrokProcs.delete(tunnelId);
@@ -169,6 +201,7 @@ function startNgrokTunnel(tunnelId) {
   child.on('exit', (code, signal) => {
     if (ngrokProcs.get(tunnelId) !== child) return; // 主动停止
     ngrokProcs.delete(tunnelId);
+    db.prepare('UPDATE tunnels SET public_url = NULL WHERE id = ?').run(tunnelId);
     const cur = getTunnel(tunnelId);
     if (cur && cur.enabled) {
       const tail = tailLog(logFile(tunnelId));
@@ -188,7 +221,7 @@ function startNgrokTunnel(tunnelId) {
 
 function startTunnel(tunnel) {
   const channel = db.prepare('SELECT * FROM channels WHERE id = ?').get(tunnel.channel_id);
-  db.prepare("UPDATE tunnels SET enabled = 1, status = 'starting', pid = NULL, last_error = NULL WHERE id = ?").run(tunnel.id);
+  db.prepare("UPDATE tunnels SET enabled = 1, status = 'starting', pid = NULL, last_error = NULL, public_url = NULL WHERE id = ?").run(tunnel.id);
   if (channel.type === 'frp') restartFrpcChannel(channel.id);
   else startNgrokTunnel(tunnel.id);
   return getTunnel(tunnel.id);
@@ -196,7 +229,7 @@ function startTunnel(tunnel) {
 
 function stopTunnel(tunnel) {
   const channel = db.prepare('SELECT * FROM channels WHERE id = ?').get(tunnel.channel_id);
-  db.prepare("UPDATE tunnels SET enabled = 0, status = 'stopped', pid = NULL WHERE id = ?").run(tunnel.id);
+  db.prepare("UPDATE tunnels SET enabled = 0, status = 'stopped', pid = NULL, public_url = NULL WHERE id = ?").run(tunnel.id);
   if (channel.type === 'frp') {
     restartFrpcChannel(channel.id); // 重写配置重启；无启用隧道时直接停掉
   } else {
@@ -218,4 +251,4 @@ function init() {
   db.prepare("UPDATE tunnels SET status = 'stopped', pid = NULL WHERE status IN ('running', 'starting')").run();
 }
 
-module.exports = { startTunnel, stopTunnel, stopChannelTunnels, init };
+module.exports = { startTunnel, stopTunnel, stopChannelTunnels, init, tailLog, logFile };

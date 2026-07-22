@@ -1,6 +1,19 @@
 <template>
   <div class="profile-page">
-    <n-card title="修改密码" style="max-width: 420px">
+    <n-card title="个人资料" style="max-width: 420px">
+      <div class="avatar-row">
+        <n-avatar round :size="64" :src="avatarUrl(emailDraft, 128)">{{ avatarText }}</n-avatar>
+        <div class="avatar-hint">头像由邮箱经 Cravatar/Gravatar 生成</div>
+      </div>
+      <n-form label-placement="top">
+        <n-form-item label="邮箱">
+          <n-input v-model:value="emailDraft" placeholder="name@example.com" />
+        </n-form-item>
+        <n-button type="primary" :loading="savingEmail" @click="onSaveEmail">保存邮箱</n-button>
+      </n-form>
+    </n-card>
+
+    <n-card title="修改密码" style="max-width: 420px; margin-top: 20px">
       <n-form ref="formRef" :model="form" :rules="rules" label-placement="top">
         <n-form-item label="当前密码" path="old_password">
           <n-input
@@ -33,15 +46,39 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import api from '../api'
+import { useAuthStore } from '../stores/auth'
+import { avatarUrl } from '../utils/avatar'
 
 const message = useMessage()
+const auth = useAuthStore()
 
 const formRef = ref(null)
 const saving = ref(false)
+const savingEmail = ref(false)
 const form = reactive({ old_password: '', new_password: '', confirm: '' })
+
+const emailDraft = ref(auth.user?.email || '')
+const avatarText = computed(() => (auth.user?.username || '?').slice(0, 1).toUpperCase())
+
+async function onSaveEmail() {
+  if (emailDraft.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailDraft.value)) {
+    message.error('邮箱格式不正确')
+    return
+  }
+  savingEmail.value = true
+  try {
+    const data = await api.put('/auth/email', { email: emailDraft.value })
+    auth.user = data.user
+    message.success('邮箱已保存')
+  } catch {
+    // 拦截器已提示
+  } finally {
+    savingEmail.value = false
+  }
+}
 
 const rules = {
   old_password: { required: true, message: '请输入当前密码', trigger: 'blur' },
@@ -83,7 +120,18 @@ async function onSave() {
 <style scoped>
 .profile-page {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding-top: 40px;
+}
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.avatar-hint {
+  font-size: 12px;
+  opacity: 0.55;
 }
 </style>

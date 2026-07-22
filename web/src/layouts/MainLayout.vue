@@ -14,7 +14,7 @@
         <div class="header-title">{{ pageTitle }}</div>
         <n-dropdown :options="userOptions" @select="onUserSelect" trigger="click">
           <div class="user-chip">
-            <n-avatar round size="small">{{ avatarText }}</n-avatar>
+            <n-avatar round size="small" :src="avatarUrl(auth.user?.email, 64)">{{ avatarText }}</n-avatar>
             <span class="username">{{ auth.user?.username }}</span>
             <n-tag v-if="auth.isAdmin" size="tiny" type="info">管理员</n-tag>
           </div>
@@ -31,6 +31,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { avatarUrl } from '../utils/avatar'
 
 const route = useRoute()
 const router = useRouter()
@@ -39,11 +40,12 @@ const auth = useAuthStore()
 const titles = {
   dashboard: '仪表盘',
   tunnels: '隧道',
+  'tunnel-detail': '隧道详情',
   channels: '渠道',
   users: '用户',
   groups: '用户组',
   settings: '设置',
-  profile: '修改密码'
+  profile: '个人资料'
 }
 
 const activeKey = computed(() => route.name)

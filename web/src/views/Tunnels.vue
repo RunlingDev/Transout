@@ -36,12 +36,14 @@
 </template>
 
 <script setup>
-import { computed, h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { NButton, NPopconfirm, NPopover, NSpace, NSwitch, NTag, NText, useDialog, useMessage } from 'naive-ui'
 import api from '../api'
 import StatusDot from '../components/StatusDot.vue'
 import TunnelForm from '../components/TunnelForm.vue'
 
+const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
 
@@ -59,8 +61,6 @@ const emptyForm = () => ({
   proto: 'tcp',
   source_host: '127.0.0.1',
   source_port: null,
-  target_host: '',
-  target_port: null,
   remote_port: null,
   subdomain: '',
   domain: ''
@@ -73,9 +73,13 @@ const channelMap = computed(() => Object.fromEntries(channels.value.map((c) => [
 function publicEndpoint(row) {
   const ch = channelMap.value[row.channel_id]
   if (ch?.type === 'ngrok' || row.channel_type === 'ngrok') {
-    return row.domain || row.subdomain || '—'
+    return row.public_url || row.domain || '—'
   }
-  if (row.proto === 'tcp') return row.remote_port ? `:${row.remote_port}` : '—'
+  if (row.proto === 'tcp') {
+    const addr = ch?.config?.serverAddr
+    if (!row.remote_port) return '—'
+    return addr ? `${addr}:${row.remote_port}` : `:${row.remote_port}`
+  }
   return row.domain || row.subdomain || '—'
 }
 
@@ -90,7 +94,16 @@ async function toggleTunnel(row, val) {
 }
 
 const columns = [
-  { title: '名称', key: 'name' },
+  {
+    title: '名称',
+    key: 'name',
+    render: (row) =>
+      h(
+        NButton,
+        { text: true, type: 'primary', onClick: () => router.push(`/tunnels/${row.id}`) },
+        { default: () => row.name }
+      )
+  },
   { title: '渠道', key: 'channel_name' },
   {
     title: '协议',
@@ -169,8 +182,8 @@ const columns = [
   }
 ]
 
-async function load() {
-  loading.value = true
+async function load(silent = false) {
+  if (!silent) loading.value = true
   try {
     const [t, c] = await Promise.all([api.get('/tunnels'), api.get('/channels')])
     tunnels.value = t
@@ -181,6 +194,16 @@ async function load() {
     loading.value = false
   }
 }
+
+// 状态轮询：每 3 秒静默刷新一次，页面隐藏时暂停
+let timer = null
+onMounted(() => {
+  load()
+  timer = setInterval(() => {
+    if (!document.hidden) load(true)
+  }, 3000)
+})
+onUnmounted(() => clearInterval(timer))
 
 function openCreate() {
   editing.value = null
@@ -204,8 +227,6 @@ function openEdit(row) {
     proto: row.proto,
     source_host: row.source_host,
     source_port: row.source_port,
-    target_host: row.target_host || '',
-    target_port: row.target_port ?? null,
     remote_port: row.remote_port ?? null,
     subdomain: row.subdomain || '',
     domain: row.domain || ''
@@ -221,8 +242,6 @@ function buildPayload() {
     source_host: form.source_host,
     source_port: form.source_port
   }
-  if (form.target_host) payload.target_host = form.target_host
-  if (form.target_port != null) payload.target_port = form.target_port
   if (form.proto === 'tcp') {
     if (form.remote_port != null) payload.remote_port = form.remote_port
   } else {
@@ -264,8 +283,6 @@ async function onDelete(row) {
     // 拦截器已提示
   }
 }
-
-onMounted(load)
 </script>
 
 <style scoped>

@@ -1,5 +1,7 @@
-// 源站策略：按用户所在组限制可穿透的内网源站
+// 源站策略：按用户所属全部用户组聚合判定
 // 条目支持："host"、"host:port"、IPv4 CIDR、"*.suffix" 域名通配
+// 聚合规则：任一白名单组存在时，源站必须命中所有白名单组列表的并集；命中任一黑名单组列表即拒绝
+const { db, getUserGroupIds } = require('../db');
 
 // IPv4 转 32 位整数，非法返回 null
 function ipToLong(ip) {
@@ -47,30 +49,41 @@ function matchEntry(entry, host, port) {
   return hostMatch(entry, host);
 }
 
-// 检查源站是否放行，返回 {allowed, reason?}
-function checkSourceAllowed(group, host, port) {
-  const mode = group ? group.source_policy_mode : 'none';
-  let list = [];
-  try {
-    list = JSON.parse((group && group.source_policy_list) || '[]');
-  } catch (e) { /* 解析失败按空列表 */ }
-  if (!Array.isArray(list)) list = [];
+// 检查源站是否放行（聚合用户全部所属组的策略），返回 {allowed, reason?}
+function checkSourceAllowed(user, host, port) {
+  const gids = getUserGroupIds(user.id);
+  const groups = gids.length
+    ? db.prepare(`SELECT * FROM groups WHERE id IN (${gids.map(() => '?').join(',')})`).all(...gids)
+    : [];
 
-  if (!mode || mode === 'none') return { allowed: true };
+  const parseList = (g) => {
+    try {
+      const l = JSON.parse(g.source_policy_list || '[]');
+      return Array.isArray(l) ? l : [];
+    } catch (e) {
+      return [];
+    }
+  };
 
-  const matched = list.some((e) => matchEntry(e, host, port));
+  const whitelistGroups = groups.filter((g) => g.source_policy_mode === 'whitelist');
+  const blacklistGroups = groups.filter((g) => g.source_policy_mode === 'blacklist');
 
-  if (mode === 'whitelist') {
-    if (list.length === 0) return { allowed: false, reason: '所在组的源站白名单为空，禁止所有源站' };
-    return matched
-      ? { allowed: true }
-      : { allowed: false, reason: `源站 ${host}:${port} 不在所在组的白名单内` };
+  if (whitelistGroups.length > 0) {
+    const union = whitelistGroups.flatMap(parseList);
+    if (union.length === 0) {
+      return { allowed: false, reason: '所在组的源站白名单为空，禁止所有源站' };
+    }
+    if (!union.some((e) => matchEntry(e, host, port))) {
+      return { allowed: false, reason: `源站 ${host}:${port} 不在所在组的白名单内` };
+    }
   }
-  if (mode === 'blacklist') {
-    return matched
-      ? { allowed: false, reason: `源站 ${host}:${port} 命中所在组的黑名单` }
-      : { allowed: true };
+
+  for (const g of blacklistGroups) {
+    if (parseList(g).some((e) => matchEntry(e, host, port))) {
+      return { allowed: false, reason: `源站 ${host}:${port} 命中所在组「${g.name}」的黑名单` };
+    }
   }
+
   return { allowed: true };
 }
 

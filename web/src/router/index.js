@@ -9,6 +9,7 @@ const routes = [
     children: [
       { path: '', name: 'dashboard', component: () => import('../views/Dashboard.vue') },
       { path: 'tunnels', name: 'tunnels', component: () => import('../views/Tunnels.vue') },
+      { path: 'tunnels/:id', name: 'tunnel-detail', component: () => import('../views/TunnelDetail.vue') },
       { path: 'channels', name: 'channels', component: () => import('../views/Channels.vue'), meta: { admin: true } },
       { path: 'users', name: 'users', component: () => import('../views/Users.vue'), meta: { admin: true } },
       { path: 'groups', name: 'groups', component: () => import('../views/Groups.vue'), meta: { admin: true } },

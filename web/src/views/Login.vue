@@ -83,6 +83,12 @@ async function onSubmit() {
 .login-card {
   width: 380px;
 }
+.login-card :deep(.n-form-item) {
+  margin-bottom: 20px;
+}
+.login-card :deep(.n-button) {
+  margin-top: 4px;
+}
 .brand {
   font-size: 28px;
   font-weight: 700;

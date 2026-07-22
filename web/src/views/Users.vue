@@ -36,12 +36,15 @@
             placeholder="密码"
           />
         </n-form-item>
-        <n-form-item label="所属用户组" path="group_id">
+        <n-form-item label="邮箱（可选，用于头像）" path="email">
+          <n-input v-model:value="form.email" placeholder="name@example.com" />
+        </n-form-item>
+        <n-form-item label="所属用户组（可多选）" path="group_ids">
           <n-select
-            v-model:value="form.group_id"
+            v-model:value="form.group_ids"
             :options="groupOptions"
-            clearable
-            placeholder="无"
+            multiple
+            placeholder="默认组"
           />
         </n-form-item>
         <n-form-item label="管理员">
@@ -75,7 +78,7 @@ const showModal = ref(false)
 const editing = ref(null)
 const formRef = ref(null)
 
-const form = reactive({ username: '', password: '', is_admin: false, group_id: null })
+const form = reactive({ username: '', password: '', email: '', is_admin: false, group_ids: [] })
 
 const groupOptions = computed(() => groups.value.map((g) => ({ label: g.name, value: g.id })))
 
@@ -87,11 +90,19 @@ const rules = {
       return true
     },
     trigger: 'blur'
+  },
+  email: {
+    validator: (rule, value) => {
+      if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return new Error('邮箱格式不正确')
+      return true
+    },
+    trigger: 'blur'
   }
 }
 
 const columns = [
   { title: '用户名', key: 'username' },
+  { title: '邮箱', key: 'email', render: (row) => row.email || '—' },
   {
     title: '角色',
     key: 'is_admin',
@@ -101,7 +112,19 @@ const columns = [
         ? h(NTag, { size: 'small', type: 'info', bordered: false }, { default: () => '管理员' })
         : h(NTag, { size: 'small', bordered: false }, { default: () => '普通用户' })
   },
-  { title: '用户组', key: 'group_name', render: (row) => row.group_name || '—' },
+  {
+    title: '用户组',
+    key: 'groups',
+    render: (row) =>
+      row.groups?.length
+        ? h(NSpace, { size: 4 }, {
+            default: () =>
+              row.groups.map((g) =>
+                h(NTag, { size: 'small', bordered: false }, { default: () => g.name })
+              )
+          })
+        : '—'
+  },
   { title: '创建时间', key: 'created_at', render: (row) => formatTime(row.created_at) },
   {
     title: '操作',
@@ -154,7 +177,7 @@ async function load() {
 
 function openCreate() {
   editing.value = null
-  Object.assign(form, { username: '', password: '', is_admin: false, group_id: null })
+  Object.assign(form, { username: '', password: '', email: '', is_admin: false, group_ids: [] })
   showModal.value = true
 }
 
@@ -163,8 +186,9 @@ function openEdit(row) {
   Object.assign(form, {
     username: row.username,
     password: '',
+    email: row.email || '',
     is_admin: row.is_admin,
-    group_id: row.group_id ?? null
+    group_ids: (row.groups || []).map((g) => g.id)
   })
   showModal.value = true
 }
@@ -178,15 +202,16 @@ async function onSave() {
   saving.value = true
   try {
     if (editing.value) {
-      const payload = { is_admin: form.is_admin, group_id: form.group_id }
+      const payload = { is_admin: form.is_admin, email: form.email, group_ids: form.group_ids }
       if (form.password) payload.password = form.password
       await api.put(`/users/${editing.value.id}`, payload)
     } else {
       await api.post('/users', {
         username: form.username,
         password: form.password,
+        email: form.email,
         is_admin: form.is_admin,
-        group_id: form.group_id
+        group_ids: form.group_ids
       })
     }
     message.success('已保存')

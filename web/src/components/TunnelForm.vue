@@ -20,22 +20,12 @@
     <n-grid :cols="2" :x-gap="16">
       <n-gi>
         <n-form-item label="源地址" path="source_host">
-          <n-input v-model:value="form.source_host" placeholder="对外暴露的地址" />
+          <n-input v-model:value="form.source_host" placeholder="内网服务的地址" />
         </n-form-item>
       </n-gi>
       <n-gi>
         <n-form-item label="源端口" path="source_port">
           <n-input-number v-model:value="form.source_port" :min="0" :max="65535" style="width: 100%" />
-        </n-form-item>
-      </n-gi>
-      <n-gi>
-        <n-form-item label="目标地址（可选）" path="target_host">
-          <n-input v-model:value="form.target_host" placeholder="留空则与源相同" />
-        </n-form-item>
-      </n-gi>
-      <n-gi>
-        <n-form-item label="目标端口（可选）" path="target_port">
-          <n-input-number v-model:value="form.target_port" :min="0" :max="65535" style="width: 100%" />
         </n-form-item>
       </n-gi>
     </n-grid>

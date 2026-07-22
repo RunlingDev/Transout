@@ -1,9 +1,10 @@
-// 用户组管理：GET 需登录，写操作仅管理员
+// 用户组管理（仅管理员）
 const express = require('express');
 const { db } = require('../db');
-const { requireAuth, requireAdmin } = require('../middleware');
+const { requireAdmin } = require('../middleware');
 
 const router = express.Router();
+router.use(requireAdmin);
 
 const DEFAULT_GROUP_ID = 1;
 const MODES = ['none', 'whitelist', 'blacklist'];
@@ -13,7 +14,7 @@ function groupView(g) {
   try {
     list = JSON.parse(g.source_policy_list || '[]');
   } catch (e) { /* 按空列表 */ }
-  const memberCount = db.prepare('SELECT COUNT(*) AS n FROM users WHERE group_id = ?').get(g.id).n;
+  const memberCount = db.prepare('SELECT COUNT(*) AS n FROM user_groups WHERE group_id = ?').get(g.id).n;
   return {
     id: g.id,
     name: g.name,
@@ -35,11 +36,11 @@ function validatePolicy(body) {
   return { mode, listJson: JSON.stringify(list) };
 }
 
-router.get('/', requireAuth, (req, res) => {
+router.get('/', (req, res) => {
   res.json(db.prepare('SELECT * FROM groups ORDER BY id').all().map(groupView));
 });
 
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', (req, res) => {
   const { name, description } = req.body || {};
   if (!name || typeof name !== 'string') return res.status(400).json({ error: '组名不能为空' });
   const p = validatePolicy(req.body || {});
@@ -85,8 +86,18 @@ router.delete('/:id', requireAdmin, (req, res) => {
   if (id === DEFAULT_GROUP_ID) return res.status(400).json({ error: '默认组不可删除' });
   const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(id);
   if (!g) return res.status(404).json({ error: '用户组不存在' });
-  // 成员迁移到默认组，清理渠道授权记录
-  db.prepare('UPDATE users SET group_id = ? WHERE group_id = ?').run(DEFAULT_GROUP_ID, id);
+  // 清理成员关系：不再属于任何组的用户回落到默认组
+  db.prepare('DELETE FROM user_groups WHERE group_id = ?').run(id);
+  db.prepare(`
+    INSERT OR IGNORE INTO user_groups (user_id, group_id)
+    SELECT id, ? FROM users WHERE id NOT IN (SELECT user_id FROM user_groups)`).run(DEFAULT_GROUP_ID);
+  // users.group_id（主组展示）同步修正
+  db.prepare(`
+    UPDATE users SET group_id = COALESCE(
+      (SELECT MIN(group_id) FROM user_groups WHERE user_id = users.id), ?)
+    WHERE group_id NOT IN (SELECT id FROM groups WHERE id != ?) OR group_id = ?`)
+    .run(DEFAULT_GROUP_ID, id, id);
+  // 清理渠道授权记录
   db.prepare("DELETE FROM channel_access WHERE subject_type = 'group' AND subject_id = ?").run(id);
   db.prepare('DELETE FROM groups WHERE id = ?').run(id);
   res.json({ ok: true });
