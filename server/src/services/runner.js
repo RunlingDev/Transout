@@ -246,9 +246,20 @@ function stopChannelTunnels(channelId) {
   for (const t of rows) stopTunnel(t);
 }
 
-// 服务启动时清理上次遗留的运行状态（孤儿进程不在管辖内，需用户重新启动隧道）
+// 服务启动时清理上次遗留的运行状态，并按「开机自启」标记拉起隧道
 function init() {
   db.prepare("UPDATE tunnels SET status = 'stopped', pid = NULL WHERE status IN ('running', 'starting')").run();
+  const rows = db.prepare(`
+    SELECT t.* FROM tunnels t JOIN channels c ON c.id = t.channel_id
+    WHERE t.auto_start = 1 AND c.enabled = 1`).all();
+  for (const t of rows) {
+    try {
+      startTunnel(t);
+    } catch (e) {
+      db.prepare("UPDATE tunnels SET status = 'error', last_error = ? WHERE id = ?")
+        .run(`开机自启失败：${e.message}`, t.id);
+    }
+  }
 }
 
 module.exports = { startTunnel, stopTunnel, stopChannelTunnels, init, tailLog, logFile };

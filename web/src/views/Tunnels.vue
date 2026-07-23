@@ -99,6 +99,17 @@ async function toggleTunnel(row, val) {
   await load()
 }
 
+// 开机自启开关：与隧道当前运行状态无关，静默刷新即可
+async function toggleAutoStart(row, val) {
+  try {
+    await api.post(`/tunnels/${row.id}/auto-start`, { auto_start: val })
+    message.success(val ? `「${row.name}」将随服务启动自动拉起` : `已取消「${row.name}」的开机自启`)
+  } catch {
+    // 拦截器已提示
+  }
+  await load(true)
+}
+
 const columns = [
   {
     title: '名称',
@@ -160,6 +171,17 @@ const columns = [
         size: 'small',
         value: row.status === 'running' || row.status === 'starting',
         onUpdateValue: (val) => toggleTunnel(row, val)
+      })
+  },
+  {
+    title: '自启',
+    key: 'auto_start',
+    width: 70,
+    render: (row) =>
+      h(NSwitch, {
+        size: 'small',
+        value: !!row.auto_start,
+        onUpdateValue: (val) => toggleAutoStart(row, val)
       })
   },
   {
