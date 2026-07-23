@@ -27,15 +27,16 @@
       </n-gi>
     </n-grid>
 
-    <n-card title="隧道状态" style="margin-top: 20px">
-      <n-data-table
-        :columns="columns"
-        :data="tunnels"
-        :loading="loading"
-        :pagination="{ pageSize: 10 }"
-        size="small"
-      />
-    </n-card>
+    <ResponsiveTable
+      title="隧道状态"
+      style="margin-top: 20px"
+      :columns="columns"
+      :data="tunnels"
+      :loading="loading"
+      :row-key="(row) => row.id"
+      :pagination="{ pageSize: 10 }"
+      size="small"
+    />
   </div>
 </template>
 
@@ -43,6 +44,7 @@
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { NTag } from 'naive-ui'
 import api from '../api'
+import ResponsiveTable from '../components/ResponsiveTable.vue'
 import StatusDot from '../components/StatusDot.vue'
 
 const tunnels = ref([])

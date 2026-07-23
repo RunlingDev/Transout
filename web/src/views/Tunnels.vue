@@ -5,18 +5,19 @@
         <div class="title">隧道</div>
         <div class="desc">管理内网穿透隧道</div>
       </div>
-      <n-button type="primary" @click="openCreate">新建隧道</n-button>
+      <n-space>
+        <n-button @click="showImport = true">导入</n-button>
+        <n-button type="primary" @click="openCreate">新建隧道</n-button>
+      </n-space>
     </div>
 
-    <n-card>
-      <n-data-table
-        :columns="columns"
-        :data="tunnels"
-        :loading="loading"
-        :row-key="(row) => row.id"
-        :pagination="{ pageSize: 15 }"
-      />
-    </n-card>
+    <ResponsiveTable
+      :columns="columns"
+      :data="tunnels"
+      :loading="loading"
+      :row-key="(row) => row.id"
+      :pagination="{ pageSize: 15 }"
+    />
 
     <n-modal
       v-model:show="showModal"
@@ -32,6 +33,8 @@
         </div>
       </template>
     </n-modal>
+
+    <TunnelImportDialog v-model:show="showImport" @imported="load(true)" />
   </div>
 </template>
 
@@ -40,8 +43,10 @@ import { computed, h, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NPopconfirm, NPopover, NSpace, NSwitch, NTag, NText, useDialog, useMessage } from 'naive-ui'
 import api from '../api'
+import ResponsiveTable from '../components/ResponsiveTable.vue'
 import StatusDot from '../components/StatusDot.vue'
 import TunnelForm from '../components/TunnelForm.vue'
+import TunnelImportDialog from '../components/TunnelImportDialog.vue'
 
 const router = useRouter()
 const message = useMessage()
@@ -52,6 +57,7 @@ const channels = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const showModal = ref(false)
+const showImport = ref(false)
 const editing = ref(null)
 const formRef = ref(null)
 

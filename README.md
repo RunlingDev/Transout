@@ -36,12 +36,25 @@ make dev        # 开发模式：后端 :7321 + 前端 Vite :5173（/api 已代�
 
 ## 生产部署（sqlite + nginx）
 
-一键部署（构建前端、安装后端到 /opt/transout、生成 nginx 配置、注册并启用 systemd 服务）：
+一行安装（无需克隆仓库，脚本自动从 GitHub 拉取源码；node/nginx 等依赖缺失会询问后自动安装，ngrok 走官方 apt 源、frpc 从 GitHub 发布页安装）：
+
+```bash
+curl -fsSL https://github.com/RunlingDev/Transout/raw/refs/heads/main/deploy/install.sh | sudo bash
+```
+
+仓库内一键部署（构建前端、安装后端到 /opt/transout、生成 nginx 配置、注册并启用 systemd 服务）：
 
 ```bash
 sudo bash deploy/install.sh                      # 全默认；--domain/--port/--web-root/--user 可覆盖
-sudo bash deploy/install.sh --domain example.com # 指定域名
+sudo bash deploy/install.sh --domain example.com # 指定域名（nginx server_name）
+sudo bash deploy/install.sh --port 8080          # 指定 nginx 监听端口（后端固定 127.0.0.1:7321，由 nginx 反代）
 sudo bash deploy/install.sh --skip-nginx         # 只装后端 + systemd
+```
+
+检测到已有安装时脚本自动进入升级模式：更新代码与依赖、保留 `data/` 与已有 systemd/nginx 配置并重启服务；升级时显式传 `--domain`/`--port` 才会重写 nginx 配置。
+
+```bash
+git pull && sudo bash deploy/install.sh          # 一键升级
 ```
 
 手动部署：

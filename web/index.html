@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Transout 内网穿透控制面板</title>
+    <script>
+      // 首屏防闪烁：按用户偏好/系统主题预设背景色（与 naive-ui 主题色一致）
+      ;(function () {
+        var mode = localStorage.getItem('theme-mode') || 'system'
+        var dark =
+          mode === 'dark' ||
+          (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.style.background = dark ? '#101014' : '#ffffff'
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

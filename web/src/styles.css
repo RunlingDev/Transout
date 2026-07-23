@@ -1,0 +1,59 @@
+/* 表格列宽拖拽 */
+.rt-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.rt-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rt-handle {
+  position: absolute;
+  right: -8px;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  cursor: col-resize;
+  z-index: 2;
+}
+.rt-handle::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.rt-header:hover .rt-handle::after,
+body.rt-resizing .rt-handle::after {
+  opacity: 0.35;
+}
+body.rt-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  /* 弹窗宽度不超出屏幕 */
+  .n-modal {
+    max-width: calc(100vw - 32px) !important;
+  }
+  /* 页面标题区允许换行堆叠 */
+  .page-head {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .page-head .title {
+    font-size: 20px !important;
+  }
+}

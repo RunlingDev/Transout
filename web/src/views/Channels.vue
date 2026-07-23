@@ -8,15 +8,13 @@
       <n-button type="primary" @click="openCreate">新建渠道</n-button>
     </div>
 
-    <n-card>
-      <n-data-table
-        :columns="columns"
-        :data="channels"
-        :loading="loading"
-        :row-key="(row) => row.id"
-        :pagination="{ pageSize: 15 }"
-      />
-    </n-card>
+    <ResponsiveTable
+      :columns="columns"
+      :data="channels"
+      :loading="loading"
+      :row-key="(row) => row.id"
+      :pagination="{ pageSize: 15 }"
+    />
 
     <n-modal
       v-model:show="showModal"
@@ -24,7 +22,7 @@
       :title="editing ? '编辑渠道' : '新建渠道'"
       style="width: 560px"
     >
-      <ChannelForm ref="formRef" :form="form" :is-admin="auth.isAdmin" />
+      <ChannelForm ref="formRef" :form="form" :is-admin="auth.isAdmin" :channel-id="editing?.id ?? null" />
       <template #footer>
         <div class="modal-footer">
           <n-button @click="showModal = false">取消</n-button>
@@ -40,6 +38,7 @@ import { h, onMounted, reactive, ref } from 'vue'
 import { NButton, NPopconfirm, NSpace, NSwitch, NTag, useMessage } from 'naive-ui'
 import api from '../api'
 import ChannelForm from '../components/ChannelForm.vue'
+import ResponsiveTable from '../components/ResponsiveTable.vue'
 import { useAuthStore } from '../stores/auth'
 
 const message = useMessage()
@@ -53,10 +52,20 @@ const editing = ref(null)
 const formRef = ref(null)
 const checkingId = ref(null)
 
+const emptyCloud = () => ({
+  provider: '',
+  regionId: '',
+  instanceId: '',
+  securityGroupId: '',
+  accessKeyId: '',
+  accessKeySecret: ''
+})
+
 const emptyForm = () => ({
   name: '',
   type: 'frp',
   config: { serverAddr: '', serverPort: 7000, token: '', authtoken: '', region: '' },
+  cloud: emptyCloud(),
   enabled: true,
   access: []
 })
@@ -66,7 +75,8 @@ const form = reactive(emptyForm())
 function configSummary(row) {
   if (row.type === 'frp') {
     const c = row.config || {}
-    return c.serverAddr ? `${c.serverAddr}:${c.serverPort || ''}` : '—'
+    const base = c.serverAddr ? `${c.serverAddr}:${c.serverPort || ''}` : '—'
+    return c.cloud && c.cloud.provider ? `${base} · 云安全组` : base
   }
   const c = row.config || {}
   return c.region ? `区域 ${c.region}` : '—'
@@ -194,6 +204,8 @@ function openEdit(row) {
       authtoken: row.config?.authtoken ?? '',
       region: row.config?.region || ''
     },
+    // 回显云安全组绑定；accessKeySecret 为掩码值，保存时原样传回表示不修改
+    cloud: row.config?.cloud ? { ...emptyCloud(), ...row.config.cloud } : emptyCloud(),
     enabled: row.enabled,
     access: row.access || []
   })
@@ -202,11 +214,26 @@ function openEdit(row) {
 
 function buildConfig() {
   if (form.type === 'frp') {
-    return {
+    const config = {
       serverAddr: form.config.serverAddr,
       serverPort: form.config.serverPort,
       token: form.config.token || ''
     }
+    // 不绑定云厂商则不携带 cloud 字段；编辑时 secret 留空/掩码传回 ******** 表示不修改
+    if (form.cloud.provider) {
+      config.cloud = {
+        provider: form.cloud.provider,
+        regionId: form.cloud.regionId,
+        instanceId: form.cloud.instanceId || '',
+        securityGroupId: form.cloud.securityGroupId,
+        accessKeyId: form.cloud.accessKeyId,
+        accessKeySecret:
+          editing.value && (!form.cloud.accessKeySecret || form.cloud.accessKeySecret === '********')
+            ? '********'
+            : form.cloud.accessKeySecret
+      }
+    }
+    return config
   }
   return {
     authtoken: form.config.authtoken || '',

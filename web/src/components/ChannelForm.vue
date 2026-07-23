@@ -30,6 +30,57 @@
           placeholder="留空表示无；******** 表示不修改"
         />
       </n-form-item>
+      <n-collapse v-if="form.cloud" style="margin-bottom: 12px">
+        <n-collapse-item title="云安全组绑定（可选）" name="cloud">
+          <n-form-item label="云厂商">
+            <n-radio-group v-model:value="form.cloud.provider">
+              <n-radio-button value="">不绑定</n-radio-button>
+              <n-radio-button value="aliyun">阿里云</n-radio-button>
+              <n-radio-button value="tencent">腾讯云</n-radio-button>
+            </n-radio-group>
+          </n-form-item>
+          <template v-if="form.cloud.provider">
+            <n-grid :cols="2" :x-gap="16">
+              <n-gi>
+                <n-form-item label="地域 regionId">
+                  <n-input v-model:value="form.cloud.regionId" placeholder="如 cn-hangzhou / ap-guangzhou" />
+                </n-form-item>
+              </n-gi>
+              <n-gi>
+                <n-form-item label="实例 ID（仅记录展示）">
+                  <n-input v-model:value="form.cloud.instanceId" placeholder="i-xxx" />
+                </n-form-item>
+              </n-gi>
+              <n-gi>
+                <n-form-item label="安全组 ID">
+                  <n-input v-model:value="form.cloud.securityGroupId" placeholder="sg-xxx" />
+                </n-form-item>
+              </n-gi>
+              <n-gi>
+                <n-form-item label="AccessKey ID">
+                  <n-input v-model:value="form.cloud.accessKeyId" />
+                </n-form-item>
+              </n-gi>
+            </n-grid>
+            <n-form-item label="AccessKey Secret">
+              <n-input
+                v-model:value="form.cloud.accessKeySecret"
+                type="password"
+                show-password-on="click"
+                placeholder="留空或 ******** 表示不修改"
+              />
+            </n-form-item>
+            <n-form-item>
+              <n-space align="center">
+                <n-button :loading="testing" @click="onTestCloud">测试连接</n-button>
+                <n-text v-if="testResult" :type="testResult.ok ? 'success' : 'error'" style="font-size: 13px">
+                  {{ testResult.ok ? testResult.message : testResult.error }}
+                </n-text>
+              </n-space>
+            </n-form-item>
+          </template>
+        </n-collapse-item>
+      </n-collapse>
     </template>
     <template v-else>
       <n-form-item label="Authtoken">
@@ -55,13 +106,17 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useMessage } from 'naive-ui'
+import api from '../api'
 import AccessEditor from './AccessEditor.vue'
 
-defineProps({
+const props = defineProps({
   form: { type: Object, required: true },
-  isAdmin: { type: Boolean, default: false }
+  isAdmin: { type: Boolean, default: false },
+  channelId: { type: Number, default: null }
 })
 
+const message = useMessage()
 const formRef = ref(null)
 
 const rules = {
@@ -71,6 +126,30 @@ const rules = {
 
 function validate() {
   return formRef.value.validate()
+}
+
+// 测试云安全组连接：用表单当前值调用后端，掩码/留空的 secret 由后端按 channelId 取已存值
+const testing = ref(false)
+const testResult = ref(null)
+
+async function onTestCloud() {
+  const cloud = props.form.cloud
+  if (!cloud?.provider) {
+    message.warning('请先选择云厂商')
+    return
+  }
+  testing.value = true
+  testResult.value = null
+  try {
+    testResult.value = await api.post('/channels/check-cloud', {
+      channel_id: props.channelId,
+      cloud
+    })
+  } catch {
+    // 拦截器已提示
+  } finally {
+    testing.value = false
+  }
 }
 
 defineExpose({ validate })
