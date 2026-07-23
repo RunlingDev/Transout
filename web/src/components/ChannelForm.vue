@@ -30,6 +30,49 @@
           placeholder="留空表示无；******** 表示不修改"
         />
       </n-form-item>
+      <n-collapse v-if="form.cloud" style="margin-bottom: 12px">
+        <n-collapse-item title="云安全组绑定（可选）" name="cloud">
+          <n-form-item label="云厂商">
+            <n-radio-group v-model:value="form.cloud.provider">
+              <n-radio-button value="">不绑定</n-radio-button>
+              <n-radio-button value="aliyun">阿里云</n-radio-button>
+              <n-radio-button value="tencent">腾讯云</n-radio-button>
+            </n-radio-group>
+          </n-form-item>
+          <template v-if="form.cloud.provider">
+            <n-grid :cols="2" :x-gap="16">
+              <n-gi>
+                <n-form-item label="地域 regionId">
+                  <n-input v-model:value="form.cloud.regionId" placeholder="如 cn-hangzhou / ap-guangzhou" />
+                </n-form-item>
+              </n-gi>
+              <n-gi>
+                <n-form-item label="实例 ID（仅记录展示）">
+                  <n-input v-model:value="form.cloud.instanceId" placeholder="i-xxx" />
+                </n-form-item>
+              </n-gi>
+              <n-gi>
+                <n-form-item label="安全组 ID">
+                  <n-input v-model:value="form.cloud.securityGroupId" placeholder="sg-xxx" />
+                </n-form-item>
+              </n-gi>
+              <n-gi>
+                <n-form-item label="AccessKey ID">
+                  <n-input v-model:value="form.cloud.accessKeyId" />
+                </n-form-item>
+              </n-gi>
+            </n-grid>
+            <n-form-item label="AccessKey Secret">
+              <n-input
+                v-model:value="form.cloud.accessKeySecret"
+                type="password"
+                show-password-on="click"
+                placeholder="留空或 ******** 表示不修改"
+              />
+            </n-form-item>
+          </template>
+        </n-collapse-item>
+      </n-collapse>
     </template>
     <template v-else>
       <n-form-item label="Authtoken">

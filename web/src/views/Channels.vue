@@ -52,10 +52,20 @@ const editing = ref(null)
 const formRef = ref(null)
 const checkingId = ref(null)
 
+const emptyCloud = () => ({
+  provider: '',
+  regionId: '',
+  instanceId: '',
+  securityGroupId: '',
+  accessKeyId: '',
+  accessKeySecret: ''
+})
+
 const emptyForm = () => ({
   name: '',
   type: 'frp',
   config: { serverAddr: '', serverPort: 7000, token: '', authtoken: '', region: '' },
+  cloud: emptyCloud(),
   enabled: true,
   access: []
 })
@@ -65,7 +75,8 @@ const form = reactive(emptyForm())
 function configSummary(row) {
   if (row.type === 'frp') {
     const c = row.config || {}
-    return c.serverAddr ? `${c.serverAddr}:${c.serverPort || ''}` : '—'
+    const base = c.serverAddr ? `${c.serverAddr}:${c.serverPort || ''}` : '—'
+    return c.cloud && c.cloud.provider ? `${base} · 云安全组` : base
   }
   const c = row.config || {}
   return c.region ? `区域 ${c.region}` : '—'
@@ -193,6 +204,8 @@ function openEdit(row) {
       authtoken: row.config?.authtoken ?? '',
       region: row.config?.region || ''
     },
+    // 回显云安全组绑定；accessKeySecret 为掩码值，保存时原样传回表示不修改
+    cloud: row.config?.cloud ? { ...emptyCloud(), ...row.config.cloud } : emptyCloud(),
     enabled: row.enabled,
     access: row.access || []
   })
@@ -201,11 +214,26 @@ function openEdit(row) {
 
 function buildConfig() {
   if (form.type === 'frp') {
-    return {
+    const config = {
       serverAddr: form.config.serverAddr,
       serverPort: form.config.serverPort,
       token: form.config.token || ''
     }
+    // 不绑定云厂商则不携带 cloud 字段；编辑时 secret 留空/掩码传回 ******** 表示不修改
+    if (form.cloud.provider) {
+      config.cloud = {
+        provider: form.cloud.provider,
+        regionId: form.cloud.regionId,
+        instanceId: form.cloud.instanceId || '',
+        securityGroupId: form.cloud.securityGroupId,
+        accessKeyId: form.cloud.accessKeyId,
+        accessKeySecret:
+          editing.value && (!form.cloud.accessKeySecret || form.cloud.accessKeySecret === '********')
+            ? '********'
+            : form.cloud.accessKeySecret
+      }
+    }
+    return config
   }
   return {
     authtoken: form.config.authtoken || '',
