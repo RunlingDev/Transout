@@ -129,11 +129,6 @@ const columns = [
     render: (row) => h(NTag, { size: 'small', bordered: false }, { default: () => row.proto.toUpperCase() })
   },
   {
-    title: '源',
-    key: 'source',
-    render: (row) => `${row.source_host}:${row.source_port}`
-  },
-  {
     title: '公网端',
     key: 'public',
     render: (row) => publicEndpoint(row)
@@ -161,7 +156,6 @@ const columns = [
           : null
       ])
   },
-  { title: '所有者', key: 'owner_name' },
   {
     title: '启用',
     key: 'enabled',
