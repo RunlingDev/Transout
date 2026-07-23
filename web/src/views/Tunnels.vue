@@ -8,15 +8,13 @@
       <n-button type="primary" @click="openCreate">新建隧道</n-button>
     </div>
 
-    <n-card>
-      <n-data-table
-        :columns="columns"
-        :data="tunnels"
-        :loading="loading"
-        :row-key="(row) => row.id"
-        :pagination="{ pageSize: 15 }"
-      />
-    </n-card>
+    <ResponsiveTable
+      :columns="columns"
+      :data="tunnels"
+      :loading="loading"
+      :row-key="(row) => row.id"
+      :pagination="{ pageSize: 15 }"
+    />
 
     <n-modal
       v-model:show="showModal"
@@ -40,6 +38,7 @@ import { computed, h, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NPopconfirm, NPopover, NSpace, NSwitch, NTag, NText, useDialog, useMessage } from 'naive-ui'
 import api from '../api'
+import ResponsiveTable from '../components/ResponsiveTable.vue'
 import StatusDot from '../components/StatusDot.vue'
 import TunnelForm from '../components/TunnelForm.vue'
 
