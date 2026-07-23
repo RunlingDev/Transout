@@ -55,18 +55,25 @@ const props = defineProps({
 const isMobile = useIsMobile()
 
 // useResizableColumns 会把列 title 改写为渲染函数，先留存纯文本标题供卡片使用
-const plainTitles = new Map()
-props.columns.forEach((col) => {
-  if (col.key && typeof col.title === 'string') plainTitles.set(col.key, col.title)
+//（columns 可能是随断点变化的 computed，这里也做成 computed 保持同步）
+const plainTitles = computed(() => {
+  const m = new Map()
+  props.columns.forEach((col) => {
+    if (col.key && typeof col.title === 'string') m.set(col.key, col.title)
+  })
+  return m
 })
 
-const { columns, scrollX } = useResizableColumns(props.columns)
+// 每次列配置变化（断点切换）都基于克隆重新包装，避免改写调用方的列定义
+const wrapped = computed(() => useResizableColumns(props.columns.map((c) => ({ ...c }))))
+const columns = computed(() => wrapped.value.columns)
+const scrollX = computed(() => wrapped.value.scrollX)
 
 const infoCols = computed(() => props.columns.filter((col) => col.key !== 'actions' && !col.type))
 const actionsCol = computed(() => props.columns.find((col) => col.key === 'actions'))
 
 function labelOf(col) {
-  return plainTitles.get(col.key) || col.key
+  return plainTitles.value.get(col.key) || col.key
 }
 
 // 返回一个函数式组件来渲染单元格（支持列定义的 render 函数或纯文本值）
