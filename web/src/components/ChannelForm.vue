@@ -70,6 +70,14 @@
                 placeholder="留空或 ******** 表示不修改"
               />
             </n-form-item>
+            <n-form-item>
+              <n-space align="center">
+                <n-button :loading="testing" @click="onTestCloud">测试连接</n-button>
+                <n-text v-if="testResult" :type="testResult.ok ? 'success' : 'error'" style="font-size: 13px">
+                  {{ testResult.ok ? testResult.message : testResult.error }}
+                </n-text>
+              </n-space>
+            </n-form-item>
           </template>
         </n-collapse-item>
       </n-collapse>
@@ -98,13 +106,17 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useMessage } from 'naive-ui'
+import api from '../api'
 import AccessEditor from './AccessEditor.vue'
 
-defineProps({
+const props = defineProps({
   form: { type: Object, required: true },
-  isAdmin: { type: Boolean, default: false }
+  isAdmin: { type: Boolean, default: false },
+  channelId: { type: Number, default: null }
 })
 
+const message = useMessage()
 const formRef = ref(null)
 
 const rules = {
@@ -114,6 +126,30 @@ const rules = {
 
 function validate() {
   return formRef.value.validate()
+}
+
+// 测试云安全组连接：用表单当前值调用后端，掩码/留空的 secret 由后端按 channelId 取已存值
+const testing = ref(false)
+const testResult = ref(null)
+
+async function onTestCloud() {
+  const cloud = props.form.cloud
+  if (!cloud?.provider) {
+    message.warning('请先选择云厂商')
+    return
+  }
+  testing.value = true
+  testResult.value = null
+  try {
+    testResult.value = await api.post('/channels/check-cloud', {
+      channel_id: props.channelId,
+      cloud
+    })
+  } catch {
+    // 拦截器已提示
+  } finally {
+    testing.value = false
+  }
 }
 
 defineExpose({ validate })

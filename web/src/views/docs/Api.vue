@@ -77,6 +77,7 @@
         <tr><td>PUT</td><td><code>/channels/:id</code></td><td>管理员</td><td>修改名称、启用状态、config（掩码值 <code>********</code> 表示保留原值）、授权列表</td></tr>
         <tr><td>DELETE</td><td><code>/channels/:id</code></td><td>管理员</td><td>删除渠道：先停止其下运行中的隧道，一并删除隧道与授权记录</td></tr>
         <tr><td>POST</td><td><code>/channels/:id/check</code></td><td>管理员</td><td>检测对应二进制可用性（frp 执行 <code>frpc -v</code>，ngrok 执行 <code>ngrok version</code>），返回 <code>{ ok, version }</code> 或 <code>{ ok: false, error }</code></td></tr>
+        <tr><td>POST</td><td><code>/channels/check-cloud</code></td><td>管理员</td><td>测试云安全组连接：请求 <code>{ channel_id?, cloud }</code>，<code>cloud.accessKeySecret</code> 传掩码或留空时按 <code>channel_id</code> 取已保存密钥；调用云 API 查询安全组，返回 <code>{ ok, message }</code> 或 <code>{ ok: false, error }</code></td></tr>
       </tbody>
     </table>
     <p>
