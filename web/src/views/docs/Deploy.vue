@@ -5,7 +5,18 @@
 
     <h2>一键部署（推荐）</h2>
     <p>
-      <code>deploy/install.sh</code> 一条命令完成：构建前端、安装后端到
+      无需克隆仓库，一行命令即可完成安装（脚本自动从 GitHub 拉取源码到
+      <code>/opt/transout-repo</code>，可用 <code>--repo-dir</code> 覆盖）：
+    </p>
+    <pre><code>curl -fsSL https://github.com/RunlingDev/Transout/raw/refs/heads/main/deploy/install.sh | sudo bash</code></pre>
+    <p>
+      依赖缺失时会<strong>询问是否自动安装</strong>（<code>-y</code> 免询问）：Node.js/npm、nginx 走
+      <code>apt</code>（仅 Debian/Ubuntu）；<strong>ngrok</strong> 按官方文档配置 apt 源安装；
+      <strong>frp（frpc）</strong>从 GitHub 发布页下载对应架构版本装到 <code>/usr/local/bin</code>。
+      跳过的二进制可稍后在面板「设置」中配置路径。
+    </p>
+    <p>
+      已在仓库内时，<code>deploy/install.sh</code> 一条命令完成：构建前端、安装后端到
       <code>/opt/transout</code>、部署前端产物到 <code>/var/www/transout</code>、
       生成 nginx 配置、注册并启用 systemd 服务。需在仓库根目录以 root 执行：
     </p>
@@ -22,11 +33,13 @@ sudo bash deploy/install.sh --skip-nginx         # 只装后端 + systemd</code>
         <tr><td><code>--port</code></td><td><code>80</code></td><td>nginx 监听端口；后端端口固定 7321（绑 127.0.0.1），由 nginx 反代</td></tr>
         <tr><td><code>--domain</code></td><td><code>_</code></td><td>nginx server_name，<code>_</code> 表示默认站点</td></tr>
         <tr><td><code>--user</code></td><td><code>$SUDO_USER</code>（否则 <code>transout</code>）</td><td>systemd 服务运行用户，须已存在</td></tr>
+        <tr><td><code>--repo-dir</code></td><td><code>/opt/transout-repo</code></td><td>一行安装模式下仓库克隆位置</td></tr>
+        <tr><td><code>-y, --yes</code></td><td>—</td><td>依赖缺失时不再询问，自动安装</td></tr>
         <tr><td><code>--skip-nginx</code></td><td>—</td><td>跳过 nginx 配置生成，只装后端 + systemd</td></tr>
         <tr><td><code>--skip-systemd</code></td><td>—</td><td>跳过 systemd 单元注册</td></tr>
       </tbody>
     </table>
-    <p>前置要求：已安装 node、npm（配置 nginx 时还需 nginx）。部署完成后首次访问请创建管理员账号。</p>
+    <p>前置要求：Debian/Ubuntu 推荐；node、npm、nginx 等缺失依赖可由脚本询问后自动安装。部署完成后首次访问请创建管理员账号。</p>
 
     <h3>一键升级</h3>
     <p>

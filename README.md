@@ -36,7 +36,13 @@ make dev        # 开发模式：后端 :7321 + 前端 Vite :5173（/api 已代�
 
 ## 生产部署（sqlite + nginx）
 
-一键部署（构建前端、安装后端到 /opt/transout、生成 nginx 配置、注册并启用 systemd 服务）：
+一行安装（无需克隆仓库，脚本自动从 GitHub 拉取源码；node/nginx 等依赖缺失会询问后自动安装，ngrok 走官方 apt 源、frpc 从 GitHub 发布页安装）：
+
+```bash
+curl -fsSL https://github.com/RunlingDev/Transout/raw/refs/heads/main/deploy/install.sh | sudo bash
+```
+
+仓库内一键部署（构建前端、安装后端到 /opt/transout、生成 nginx 配置、注册并启用 systemd 服务）：
 
 ```bash
 sudo bash deploy/install.sh                      # 全默认；--domain/--port/--web-root/--user 可覆盖
