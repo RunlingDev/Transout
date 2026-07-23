@@ -30,7 +30,9 @@
       frp 渠道可在表单中绑定<strong>阿里云 ECS 或腾讯云 CVM 实例的安全组</strong>（可选），
       填写云厂商、地域 <code>regionId</code>、安全组 ID 与 AccessKey 凭据。
       <code>accessKeySecret</code> 与 token 一样脱敏回显（<code>********</code>），
-      编辑时保持掩码或留空即保留原值。
+      编辑时保持掩码或留空即保留原值。表单内提供「测试连接」按钮：
+      用当前填写的凭据调用云 API 查询安全组（编辑已保存渠道时掩码密钥自动取已存值），
+      成功显示安全组可达与入方向规则数，失败显示具体原因。
     </p>
     <p>
       绑定后，frp <code>tcp</code> 隧道在<strong>创建与启动</strong>时自动向安全组放行

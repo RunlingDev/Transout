@@ -22,7 +22,7 @@
       :title="editing ? '编辑渠道' : '新建渠道'"
       style="width: 560px"
     >
-      <ChannelForm ref="formRef" :form="form" :is-admin="auth.isAdmin" />
+      <ChannelForm ref="formRef" :form="form" :is-admin="auth.isAdmin" :channel-id="editing?.id ?? null" />
       <template #footer>
         <div class="modal-footer">
           <n-button @click="showModal = false">取消</n-button>

@@ -4,6 +4,7 @@ const { execFile } = require('child_process');
 const { db, getSetting } = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware');
 const { canUseChannel } = require('../services/channelAccess');
+const cloudSg = require('../services/cloudSg');
 const runner = require('../services/runner');
 
 const router = express.Router();
@@ -159,6 +160,28 @@ router.delete('/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM channel_access WHERE channel_id = ?').run(id);
   db.prepare('DELETE FROM channels WHERE id = ?').run(id);
   res.json({ ok: true });
+});
+
+// 测试云安全组连接（凭据有效性 + 安全组可达性）。
+// 编辑已保存渠道时 accessKeySecret 传掩码或留空，取用该渠道已保存的密钥
+router.post('/check-cloud', requireAdmin, async (req, res) => {
+  const body = req.body || {};
+  const cloud = { ...(body.cloud || {}) };
+  if ((cloud.accessKeySecret === MASK || !cloud.accessKeySecret) && body.channel_id) {
+    const ch = db.prepare('SELECT config FROM channels WHERE id = ?').get(Number(body.channel_id));
+    if (ch) {
+      try {
+        const old = JSON.parse(ch.config || '{}');
+        cloud.accessKeySecret = (old.cloud && old.cloud.accessKeySecret) || '';
+      } catch { /* 配置损坏按空密钥处理，由 testConnection 报错 */ }
+    }
+  }
+  try {
+    const message = await cloudSg.testConnection(cloud);
+    res.json({ ok: true, message });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 // 检测二进制可用性：frp 用 `frpc -v`，ngrok 用 `ngrok version`

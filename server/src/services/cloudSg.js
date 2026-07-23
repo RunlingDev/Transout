@@ -267,4 +267,26 @@ async function revokeRule(cloud, port) {
   throw new Error(`不支持的云厂商：${cloud.provider}`);
 }
 
-module.exports = { authorizeRule, revokeRule };
+// 测试连接：校验凭据有效性与安全组可达性，成功返回中文摘要
+async function testConnection(cloud) {
+  const err = checkCloud(cloud);
+  if (err) throw new Error(err);
+  if (cloud.provider === 'aliyun') {
+    const attr = await aliRequest(cloud, 'DescribeSecurityGroupAttribute', {
+      SecurityGroupId: cloud.securityGroupId,
+      Direction: 'ingress',
+    });
+    const n = ((attr.Permissions && attr.Permissions.Permission) || []).length;
+    return `连接成功：安全组 ${cloud.securityGroupId} 可达，入方向规则共 ${n} 条`;
+  }
+  if (cloud.provider === 'tencent') {
+    const desc = await tcRequest(cloud, 'DescribeSecurityGroupPolicies', {
+      SecurityGroupId: cloud.securityGroupId,
+    });
+    const n = ((desc.SecurityGroupPolicySet && desc.SecurityGroupPolicySet.Ingress) || []).length;
+    return `连接成功：安全组 ${cloud.securityGroupId} 可达，入方向规则共 ${n} 条`;
+  }
+  throw new Error(`不支持的云厂商：${cloud.provider}`);
+}
+
+module.exports = { authorizeRule, revokeRule, testConnection };
