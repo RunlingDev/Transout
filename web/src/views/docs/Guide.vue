@@ -76,8 +76,9 @@
       <code>tcp</code>/<code>http</code>/<code>https</code> 协议条目。
     </p>
     <ul>
-      <li><strong>渠道匹配</strong>：按配置中的 <code>serverAddr</code> 精确匹配 frp 渠道，
-        匹配不到时所有条目导入失败并注明原因；</li>
+      <li><strong>渠道匹配</strong>：按配置中的 <code>serverAddr</code> 精确匹配 frp 渠道；
+        配置里提供了 <code>server_port</code> / <code>token</code>（toml 为 <code>auth.token</code>）时一并核对，
+        不一致会提示「server_port 或 token 不匹配」，匹配不到时所有条目导入失败并注明原因；</li>
       <li><strong>逐条处理</strong>：每条隧道独立创建，响应中逐条返回成功（含隧道 ID）或失败原因，
         单条失败不影响其他条目；</li>
       <li><strong>同名去重</strong>：与当前用户已有隧道同名的条目会被跳过并提示「同名隧道已存在」；</li>

@@ -107,7 +107,7 @@
       <tbody>
         <tr><td>GET</td><td><code>/tunnels</code></td><td>登录</td><td>隧道列表：管理员返回全部，普通用户仅返回自己的</td></tr>
         <tr><td>POST</td><td><code>/tunnels</code></td><td>登录</td><td>创建隧道：校验渠道权限与源站策略；frp TCP 需 <code>remote_port</code>，frp HTTP/HTTPS 需 <code>subdomain</code> 或 <code>domain</code>；云安全组放行失败时响应附 <code>cloud_warning</code> 但仍创建成功</td></tr>
-        <tr><td>POST</td><td><code>/tunnels/import</code></td><td>登录</td><td>从 frpc 配置（ini/toml 自动识别）批量导入隧道：请求 <code>{ content }</code> 为配置全文，按其中 <code>serverAddr</code> 精确匹配 frp 渠道；响应 <code>{ matched_channel, results[] }</code>，<code>results</code> 逐条给出 <code>{ name, success, tunnel_id }</code> 或 <code>{ name, success: false, error }</code>；与当前用户同名的隧道跳过</td></tr>
+        <tr><td>POST</td><td><code>/tunnels/import</code></td><td>登录</td><td>从 frpc 配置（ini/toml 自动识别）批量导入隧道：请求 <code>{ content }</code> 为配置全文，按其中 <code>serverAddr</code> 匹配 frp 渠道，配置提供了 <code>server_port</code>/<code>token</code> 时一并核对；响应 <code>{ matched_channel, results[] }</code>，<code>results</code> 逐条给出 <code>{ name, success, tunnel_id }</code> 或 <code>{ name, success: false, error }</code>；与当前用户同名的隧道跳过</td></tr>
         <tr><td>GET</td><td><code>/tunnels/:id</code></td><td>所有者</td><td>隧道详情（含渠道名、所有者名、状态、last_error、公网地址等）</td></tr>
         <tr><td>PUT</td><td><code>/tunnels/:id</code></td><td>所有者</td><td>修改隧道；running/starting 状态禁止修改，error 状态允许</td></tr>
         <tr><td>DELETE</td><td><code>/tunnels/:id</code></td><td>所有者</td><td>删除隧道（运行中先停止）</td></tr>

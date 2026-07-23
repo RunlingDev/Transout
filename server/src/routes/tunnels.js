@@ -123,7 +123,7 @@ router.post('/', async (req, res) => {
   res.status(201).json(view);
 });
 
-// 从 frpc 配置（ini/toml）导入隧道：解析 → 按 serverAddr 匹配 frp 渠道 → 逐条创建
+// 从 frpc 配置（ini/toml）导入隧道：解析 → 按 serverAddr + server_port + token 匹配 frp 渠道 → 逐条创建
 router.post('/import', (req, res) => {
   const content = req.body ? req.body.content : null;
   if (!content || typeof content !== 'string') {
@@ -137,13 +137,13 @@ router.post('/import', (req, res) => {
     return res.status(400).json({ error: e.message });
   }
 
-  const channel = findFrpChannel(db, parsed.serverAddr);
+  const { channel, hint } = findFrpChannel(db, parsed);
   const results = [];
   for (const entry of parsed.tunnels) {
     const fail = (error) => results.push({ name: entry.name, success: false, error });
     if (entry.error) { fail(entry.error); continue; }
     if (!entry.name) { fail('缺少隧道名称'); continue; }
-    if (!channel) { fail(`没有 serverAddr 为 ${parsed.serverAddr} 的 frp 渠道`); continue; }
+    if (!channel) { fail(hint); continue; }
     const dup = db.prepare('SELECT id FROM tunnels WHERE name = ? AND owner_id = ?')
       .get(entry.name, req.user.id);
     if (dup) { fail('同名隧道已存在'); continue; }

@@ -30,7 +30,7 @@
           <template v-if="result.matched_channel">
             已匹配渠道：{{ result.matched_channel.name }}（ID: {{ result.matched_channel.id }}）
           </template>
-          <template v-else>未匹配到对应 serverAddr 的 frp 渠道，所有条目均导入失败</template>
+          <template v-else>未匹配到 frp 渠道（按 serverAddr + server_port + token 核对），所有条目均导入失败</template>
         </n-alert>
         <ul class="result-list">
           <li v-for="(r, i) in result.results" :key="i" class="result-item">

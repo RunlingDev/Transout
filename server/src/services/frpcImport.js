@@ -164,7 +164,7 @@ function mapEntry(raw, fallbackName, index) {
   };
 }
 
-// 解析 frpc 配置内容，返回 { serverAddr, tunnels }；失败抛中文错误
+// 解析 frpc 配置内容，返回 { serverAddr, serverPort, token, tunnels }；失败抛中文错误
 function parseFrpcConfig(content) {
   if (!content || !String(content).trim()) throw new Error('配置内容为空');
   content = String(content);
@@ -172,17 +172,24 @@ function parseFrpcConfig(content) {
   if (!format) throw new Error('无法识别配置格式：既不是 frpc ini 也不是 toml');
 
   let serverAddr;
+  let serverPort;
+  let token;
   let tunnels;
   if (format === 'ini') {
     const sections = parseIni(content);
     const common = sections.find((s) => s.name.toLowerCase() === 'common');
-    serverAddr = common ? pick(common.kv, 'server_addr', 'serverAddr') : undefined;
+    const kv = common ? common.kv : {};
+    serverAddr = pick(kv, 'server_addr', 'serverAddr');
+    serverPort = pick(kv, 'server_port', 'serverPort');
+    token = pick(kv, 'token', 'auth.token');
     tunnels = sections
       .filter((s) => s.name.toLowerCase() !== 'common')
       .map((s, i) => mapEntry(s.kv, s.name, i));
   } else {
     const { root, proxies } = parseToml(content);
     serverAddr = pick(root, 'serverAddr', 'server_addr');
+    serverPort = pick(root, 'serverPort', 'server_port');
+    token = pick(root, 'auth.token', 'token');
     tunnels = proxies.map((p, i) => mapEntry(p, null, i));
   }
 
@@ -190,12 +197,20 @@ function parseFrpcConfig(content) {
     throw new Error('配置中缺少 serverAddr（frps 服务器地址）');
   }
   if (!tunnels.length) throw new Error('配置中没有可导入的隧道条目');
-  return { serverAddr: String(serverAddr).trim(), tunnels };
+  const port = Number(serverPort);
+  return {
+    serverAddr: String(serverAddr).trim(),
+    serverPort: Number.isInteger(port) && port > 0 ? port : null,
+    token: token !== undefined && token !== null && String(token).trim() !== '' ? String(token).trim() : null,
+    tunnels,
+  };
 }
 
-// 按 config.serverAddr 精确匹配 frp 渠道，返回渠道行或 null
-function findFrpChannel(db, serverAddr) {
+// 按 serverAddr + server_port + token 匹配 frp 渠道（配置里提供了哪项就校验哪项）。
+// 返回 { channel, hint }：未匹配时 hint 为中文原因（区分无此 serverAddr / 端口或 token 不一致）
+function findFrpChannel(db, { serverAddr, serverPort, token }) {
   const rows = db.prepare("SELECT * FROM channels WHERE type = 'frp'").all();
+  const sameAddr = [];
   for (const ch of rows) {
     let cfg = {};
     try {
@@ -203,9 +218,16 @@ function findFrpChannel(db, serverAddr) {
     } catch {
       continue;
     }
-    if (cfg.serverAddr === serverAddr) return ch;
+    if (String(cfg.serverAddr || '').trim() !== serverAddr) continue;
+    sameAddr.push(cfg);
+    if (serverPort && Number(cfg.serverPort) !== serverPort) continue;
+    if (token && String(cfg.token || '') !== token) continue;
+    return { channel: ch, hint: null };
   }
-  return null;
+  const hint = sameAddr.length
+    ? `存在 serverAddr 为 ${serverAddr} 的 frp 渠道，但 server_port 或 token 不匹配`
+    : `没有 serverAddr 为 ${serverAddr} 的 frp 渠道`;
+  return { channel: null, hint };
 }
 
 module.exports = { parseFrpcConfig, findFrpChannel };
