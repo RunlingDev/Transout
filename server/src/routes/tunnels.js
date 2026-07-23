@@ -6,10 +6,26 @@ const { canUseChannel } = require('../services/channelAccess');
 const { checkSourceAllowed } = require('../services/sourcePolicy');
 const { tcpCheck, publicCheck } = require('../services/tunnelTest');
 const { parseFrpcConfig, findFrpChannel } = require('../services/frpcImport');
+const cloudSg = require('../services/cloudSg');
 const runner = require('../services/runner');
 
 const router = express.Router();
 router.use(requireAuth);
+
+// 云安全组联动：渠道（frp）绑定了 config.cloud 且隧道为 tcp 且有 remote_port 时返回 cloud 配置，否则返回 null
+function cloudBinding(channel, tunnel) {
+  if (!channel || channel.type !== 'frp') return null;
+  if (tunnel.proto !== 'tcp' || !tunnel.remote_port) return null;
+  let config;
+  try {
+    config = JSON.parse(channel.config || '{}');
+  } catch {
+    return null;
+  }
+  const cloud = config.cloud;
+  if (!cloud || !cloud.provider) return null;
+  return cloud;
+}
 
 const VIEW_SQL = `
   SELECT t.*, c.name AS channel_name, c.type AS channel_type, u.username AS owner_name
@@ -86,7 +102,7 @@ router.get('/', (req, res) => {
   res.json(rows);
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const body = req.body || {};
   const channel = db.prepare('SELECT * FROM channels WHERE id = ?').get(Number(body.channel_id));
   const err = validateTunnel(req, body, channel);
@@ -94,7 +110,17 @@ router.post('/', (req, res) => {
 
   const f = pickFields(body);
   const id = insertTunnel(channel.id, req.user.id, f);
-  res.status(201).json(getView(id));
+  const view = getView(id);
+  // 云安全组放行失败不阻断创建，仅以 cloud_warning 告知
+  const cloud = cloudBinding(channel, f);
+  if (cloud) {
+    try {
+      await cloudSg.authorizeRule(cloud, f.remote_port);
+    } catch (e) {
+      view.cloud_warning = `云安全组放行失败：${e.message}`;
+    }
+  }
+  res.status(201).json(view);
 });
 
 // 从 frpc 配置（ini/toml）导入隧道：解析 → 按 serverAddr 匹配 frp 渠道 → 逐条创建
@@ -157,16 +183,31 @@ router.put('/:id', (req, res) => {
   res.json(getView(t.id));
 });
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   const t = db.prepare('SELECT * FROM tunnels WHERE id = ?').get(Number(req.params.id));
   if (!t) return res.status(404).json({ error: '隧道不存在' });
   if (!canManage(req.user, t)) return res.status(403).json({ error: '只能删除自己的隧道' });
   if (t.enabled || t.status === 'running' || t.status === 'starting') runner.stopTunnel(t);
   db.prepare('DELETE FROM tunnels WHERE id = ?').run(t.id);
+  // 云安全组规则移除：同渠道其他隧道仍占用该 remote_port 时跳过；失败仅记录日志
+  const channel = db.prepare('SELECT * FROM channels WHERE id = ?').get(t.channel_id);
+  const cloud = cloudBinding(channel, t);
+  if (cloud) {
+    const inUse = db
+      .prepare('SELECT COUNT(*) AS n FROM tunnels WHERE channel_id = ? AND proto = ? AND remote_port = ?')
+      .get(t.channel_id, 'tcp', t.remote_port).n > 0;
+    if (!inUse) {
+      try {
+        await cloudSg.revokeRule(cloud, t.remote_port);
+      } catch (e) {
+        console.error(`隧道 ${t.id} 删除后移除云安全组规则失败：${e.message}`);
+      }
+    }
+  }
   res.json({ ok: true });
 });
 
-router.post('/:id/start', (req, res) => {
+router.post('/:id/start', async (req, res) => {
   const t = db.prepare('SELECT * FROM tunnels WHERE id = ?').get(Number(req.params.id));
   if (!t) return res.status(404).json({ error: '隧道不存在' });
   if (!canManage(req.user, t)) return res.status(403).json({ error: '只能操作自己的隧道' });
@@ -180,7 +221,17 @@ router.post('/:id/start', (req, res) => {
   if (!check.allowed) return res.status(403).json({ error: check.reason });
 
   runner.startTunnel(t);
-  res.json(getView(t.id));
+  const view = getView(t.id);
+  // 确保云安全组已放行（幂等）；失败不阻断启动，仅以 cloud_warning 告知
+  const cloud = cloudBinding(channel, t);
+  if (cloud) {
+    try {
+      await cloudSg.authorizeRule(cloud, t.remote_port);
+    } catch (e) {
+      view.cloud_warning = `云安全组放行失败：${e.message}`;
+    }
+  }
+  res.json(view);
 });
 
 router.post('/:id/stop', (req, res) => {

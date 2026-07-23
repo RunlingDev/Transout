@@ -11,11 +11,16 @@ const router = express.Router();
 const SECRET_KEYS = ['token', 'authtoken'];
 const MASK = '********';
 
-// 脱敏：有值返回 ********，空返回 ''
+// 脱敏：有值返回 ********，空返回 ''；cloud.accessKeySecret 同样脱敏，其余 cloud 字段明文回显
 function maskConfig(config) {
   const c = { ...config };
   for (const k of SECRET_KEYS) {
     if (k in c) c[k] = c[k] ? MASK : '';
+  }
+  if (c.cloud && typeof c.cloud === 'object') {
+    const cloud = { ...c.cloud };
+    cloud.accessKeySecret = cloud.accessKeySecret ? MASK : '';
+    c.cloud = cloud;
   }
   return c;
 }
@@ -35,6 +40,17 @@ function channelView(ch, withAccess) {
   return view;
 }
 
+// 校验云安全组绑定（frp 渠道可选 config.cloud），返回错误消息或 null
+function validateCloud(cloud) {
+  if (cloud === undefined || cloud === null) return null;
+  if (typeof cloud !== 'object' || Array.isArray(cloud)) return 'config.cloud 必须是对象';
+  if (!['aliyun', 'tencent'].includes(cloud.provider)) return 'config.cloud.provider 必须是 aliyun 或 tencent';
+  for (const k of ['regionId', 'securityGroupId', 'accessKeyId', 'accessKeySecret']) {
+    if (!cloud[k] || typeof cloud[k] !== 'string') return `config.cloud.${k} 不能为空`;
+  }
+  return null;
+}
+
 // 校验 type 与 config，返回错误消息或 null
 function validateChannel(body) {
   const { name, type, config } = body;
@@ -48,7 +64,7 @@ function validateChannel(body) {
   } else if (!config.authtoken) {
     return 'ngrok 渠道需要 config.authtoken';
   }
-  return null;
+  return validateCloud(config.cloud);
 }
 
 // 写入授权列表（先清空再插入）
@@ -114,6 +130,13 @@ router.put('/:id', requireAdmin, (req, res) => {
     // 掩码值表示未修改，保留原值
     for (const k of SECRET_KEYS) {
       if (merged[k] === MASK) merged[k] = old[k] || '';
+    }
+    // cloud.accessKeySecret 同理：掩码或缺省表示保留原值
+    if (merged.cloud && typeof merged.cloud === 'object') {
+      const oldSecret = (old.cloud && old.cloud.accessKeySecret) || '';
+      if (merged.cloud.accessKeySecret === MASK || merged.cloud.accessKeySecret === undefined) {
+        merged.cloud = { ...merged.cloud, accessKeySecret: oldSecret };
+      }
     }
     const err = validateChannel({ name: 'x', type: ch.type, config: merged });
     if (err) return res.status(400).json({ error: err });
