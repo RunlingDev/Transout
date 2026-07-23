@@ -28,7 +28,8 @@ function cloudBinding(channel, tunnel) {
 }
 
 const VIEW_SQL = `
-  SELECT t.*, c.name AS channel_name, c.type AS channel_type, u.username AS owner_name
+  SELECT t.*, c.name AS channel_name, c.type AS channel_type,
+    u.username AS owner_name, u.email AS owner_email
   FROM tunnels t
   LEFT JOIN channels c ON c.id = t.channel_id
   LEFT JOIN users u ON u.id = t.owner_id`;

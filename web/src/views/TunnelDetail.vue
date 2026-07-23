@@ -8,14 +8,38 @@
         </div>
         <div class="desc">隧道详情与连通性测试</div>
       </div>
-      <n-switch
-        :value="tunnel.status === 'running' || tunnel.status === 'starting'"
-        @update:value="toggle"
-      >
-        <template #checked>运行中</template>
-        <template #unchecked>已停止</template>
-      </n-switch>
+      <n-space align="center">
+        <n-switch
+          :value="tunnel.status === 'running' || tunnel.status === 'starting'"
+          @update:value="toggle"
+        >
+          <template #checked>运行中</template>
+          <template #unchecked>已停止</template>
+        </n-switch>
+        <n-divider vertical />
+        <n-space align="center" :size="6">
+          <span class="auto-start-label">自启</span>
+          <n-switch size="small" :value="!!tunnel.auto_start" @update:value="toggleAutoStart" />
+        </n-space>
+        <n-button size="small" @click="openEdit">编辑</n-button>
+        <n-popconfirm @positive-click="onDelete">
+          <template #trigger>
+            <n-button size="small" quaternary type="error">删除</n-button>
+          </template>
+          确定删除该隧道？
+        </n-popconfirm>
+      </n-space>
     </div>
+
+    <n-modal v-model:show="showEdit" preset="card" title="编辑隧道" style="width: 560px">
+      <TunnelForm ref="formRef" :form="form" :channels="channels" />
+      <template #footer>
+        <div class="modal-footer">
+          <n-button @click="showEdit = false">取消</n-button>
+          <n-button type="primary" :loading="saving" @click="onSave">保存</n-button>
+        </div>
+      </template>
+    </n-modal>
 
     <n-alert v-if="tunnel.status === 'error' && tunnel.last_error" type="error" style="margin-bottom: 20px">
       {{ tunnel.last_error }}
@@ -74,14 +98,16 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useMessage } from 'naive-ui'
+import { useDialog, useMessage } from 'naive-ui'
 import api from '../api'
 import StatusDot from '../components/StatusDot.vue'
+import TunnelForm from '../components/TunnelForm.vue'
 import { useIsMobile } from '../utils/responsive'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 const isMobile = useIsMobile()
 
 const tunnel = ref(null)
@@ -149,6 +175,101 @@ async function toggle(val) {
   await load(true)
 }
 
+// 开机自启开关：与隧道当前运行状态无关
+async function toggleAutoStart(val) {
+  try {
+    await api.post(`/tunnels/${id}/auto-start`, { auto_start: val })
+    message.success(val ? '将随服务启动自动拉起' : '已取消开机自启')
+  } catch {
+    // 拦截器已提示
+  }
+  await load(true)
+}
+
+// ---------- 编辑 / 删除 ----------
+const showEdit = ref(false)
+const saving = ref(false)
+const formRef = ref(null)
+const form = reactive({
+  name: '',
+  channel_id: null,
+  proto: 'tcp',
+  source_host: '127.0.0.1',
+  source_port: null,
+  remote_port: null,
+  subdomain: '',
+  domain: ''
+})
+
+function openEdit() {
+  const t = tunnel.value
+  if (t.status === 'running' || t.status === 'starting') {
+    dialog.warning({
+      title: '隧道正在运行',
+      content: '请先停止隧道，再进行编辑。',
+      positiveText: '知道了'
+    })
+    return
+  }
+  Object.assign(form, {
+    name: t.name,
+    channel_id: t.channel_id,
+    proto: t.proto,
+    source_host: t.source_host,
+    source_port: t.source_port,
+    remote_port: t.remote_port ?? null,
+    subdomain: t.subdomain || '',
+    domain: t.domain || ''
+  })
+  showEdit.value = true
+}
+
+function buildPayload() {
+  const payload = {
+    name: form.name,
+    channel_id: form.channel_id,
+    proto: form.proto,
+    source_host: form.source_host,
+    source_port: form.source_port
+  }
+  if (form.proto === 'tcp') {
+    if (form.remote_port != null) payload.remote_port = form.remote_port
+  } else {
+    if (form.subdomain) payload.subdomain = form.subdomain
+    if (form.domain) payload.domain = form.domain
+  }
+  return payload
+}
+
+async function onSave() {
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
+  saving.value = true
+  try {
+    await api.put(`/tunnels/${id}`, buildPayload())
+    message.success('已保存')
+    showEdit.value = false
+    await load(true)
+  } catch {
+    // 拦截器已提示
+  } finally {
+    saving.value = false
+  }
+}
+
+async function onDelete() {
+  try {
+    await api.delete(`/tunnels/${id}`)
+    message.success('已删除')
+    router.push({ name: 'tunnels' })
+  } catch {
+    // 拦截器已提示
+  }
+}
+
 async function runTest(kind) {
   testing[kind] = true
   try {
@@ -203,6 +324,15 @@ onUnmounted(() => clearInterval(timer))
 .test-label {
   font-size: 13px;
   opacity: 0.7;
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.auto-start-label {
+  font-size: 13px;
+  opacity: 0.6;
 }
 .log-view {
   max-height: 320px;
