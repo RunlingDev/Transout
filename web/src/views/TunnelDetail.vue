@@ -22,7 +22,7 @@
     </n-alert>
 
     <n-card title="基本信息">
-      <n-descriptions :column="2" label-placement="left" bordered>
+      <n-descriptions :column="isMobile ? 1 : 2" label-placement="left" bordered>
         <n-descriptions-item label="渠道">{{ tunnel.channel_name }}（{{ tunnel.channel_type }}）</n-descriptions-item>
         <n-descriptions-item label="协议">{{ tunnel.proto.toUpperCase() }}</n-descriptions-item>
         <n-descriptions-item label="源站">{{ tunnel.source_host }}:{{ tunnel.source_port }}</n-descriptions-item>
@@ -77,10 +77,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import api from '../api'
 import StatusDot from '../components/StatusDot.vue'
+import { useIsMobile } from '../utils/responsive'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const isMobile = useIsMobile()
 
 const tunnel = ref(null)
 const channels = ref([])

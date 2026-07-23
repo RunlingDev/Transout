@@ -8,15 +8,13 @@
       <n-button type="primary" @click="openCreate">新建渠道</n-button>
     </div>
 
-    <n-card>
-      <n-data-table
-        :columns="columns"
-        :data="channels"
-        :loading="loading"
-        :row-key="(row) => row.id"
-        :pagination="{ pageSize: 15 }"
-      />
-    </n-card>
+    <ResponsiveTable
+      :columns="columns"
+      :data="channels"
+      :loading="loading"
+      :row-key="(row) => row.id"
+      :pagination="{ pageSize: 15 }"
+    />
 
     <n-modal
       v-model:show="showModal"
@@ -40,6 +38,7 @@ import { h, onMounted, reactive, ref } from 'vue'
 import { NButton, NPopconfirm, NSpace, NSwitch, NTag, useMessage } from 'naive-ui'
 import api from '../api'
 import ChannelForm from '../components/ChannelForm.vue'
+import ResponsiveTable from '../components/ResponsiveTable.vue'
 import { useAuthStore } from '../stores/auth'
 
 const message = useMessage()

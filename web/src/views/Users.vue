@@ -8,15 +8,13 @@
       <n-button type="primary" @click="openCreate">新建用户</n-button>
     </div>
 
-    <n-card>
-      <n-data-table
-        :columns="columns"
-        :data="users"
-        :loading="loading"
-        :row-key="(row) => row.id"
-        :pagination="{ pageSize: 15 }"
-      />
-    </n-card>
+    <ResponsiveTable
+      :columns="columns"
+      :data="users"
+      :loading="loading"
+      :row-key="(row) => row.id"
+      :pagination="{ pageSize: 15 }"
+    />
 
     <n-modal
       v-model:show="showModal"
@@ -74,6 +72,7 @@
 import { computed, h, onMounted, reactive, ref } from 'vue'
 import { NButton, NPopconfirm, NSpace, NTag, useMessage } from 'naive-ui'
 import api from '../api'
+import ResponsiveTable from '../components/ResponsiveTable.vue'
 import { useAuthStore } from '../stores/auth'
 
 const message = useMessage()
