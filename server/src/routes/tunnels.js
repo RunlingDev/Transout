@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware');
 const { canUseChannel } = require('../services/channelAccess');
 const { checkSourceAllowed } = require('../services/sourcePolicy');
 const { tcpCheck, publicCheck } = require('../services/tunnelTest');
+const { parseFrpcConfig, findFrpChannel } = require('../services/frpcImport');
 const runner = require('../services/runner');
 
 const router = express.Router();
@@ -67,6 +68,17 @@ function pickFields(body) {
   };
 }
 
+// 插入一条隧道，返回 lastInsertRowid（POST / 与导入接口共用）
+function insertTunnel(channelId, ownerId, f) {
+  const info = db.prepare(`
+    INSERT INTO tunnels (name, channel_id, owner_id, proto, source_host, source_port,
+      remote_port, subdomain, domain)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(f.name, channelId, ownerId, f.proto, f.source_host, f.source_port,
+      f.remote_port, f.subdomain, f.domain);
+  return info.lastInsertRowid;
+}
+
 router.get('/', (req, res) => {
   const rows = req.user.is_admin
     ? db.prepare(`${VIEW_SQL} ORDER BY t.id`).all()
@@ -81,13 +93,44 @@ router.post('/', (req, res) => {
   if (err) return res.status(err.status).json({ error: err.error });
 
   const f = pickFields(body);
-  const info = db.prepare(`
-    INSERT INTO tunnels (name, channel_id, owner_id, proto, source_host, source_port,
-      remote_port, subdomain, domain)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(f.name, channel.id, req.user.id, f.proto, f.source_host, f.source_port,
-      f.remote_port, f.subdomain, f.domain);
-  res.status(201).json(getView(info.lastInsertRowid));
+  const id = insertTunnel(channel.id, req.user.id, f);
+  res.status(201).json(getView(id));
+});
+
+// 从 frpc 配置（ini/toml）导入隧道：解析 → 按 serverAddr 匹配 frp 渠道 → 逐条创建
+router.post('/import', (req, res) => {
+  const content = req.body ? req.body.content : null;
+  if (!content || typeof content !== 'string') {
+    return res.status(400).json({ error: '请提供配置内容 content' });
+  }
+
+  let parsed;
+  try {
+    parsed = parseFrpcConfig(content);
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+
+  const channel = findFrpChannel(db, parsed.serverAddr);
+  const results = [];
+  for (const entry of parsed.tunnels) {
+    const fail = (error) => results.push({ name: entry.name, success: false, error });
+    if (entry.error) { fail(entry.error); continue; }
+    if (!entry.name) { fail('缺少隧道名称'); continue; }
+    if (!channel) { fail(`没有 serverAddr 为 ${parsed.serverAddr} 的 frp 渠道`); continue; }
+    const dup = db.prepare('SELECT id FROM tunnels WHERE name = ? AND owner_id = ?')
+      .get(entry.name, req.user.id);
+    if (dup) { fail('同名隧道已存在'); continue; }
+    const err = validateTunnel(req, entry, channel);
+    if (err) { fail(err.error); continue; }
+    const id = insertTunnel(channel.id, req.user.id, pickFields(entry));
+    results.push({ name: entry.name, success: true, tunnel_id: Number(id) });
+  }
+
+  res.json({
+    matched_channel: channel ? { id: channel.id, name: channel.name } : null,
+    results,
+  });
 });
 
 router.put('/:id', (req, res) => {
