@@ -114,6 +114,7 @@
         <tr><td>DELETE</td><td><code>/tunnels/:id</code></td><td>所有者</td><td>删除隧道（运行中先停止）</td></tr>
         <tr><td>POST</td><td><code>/tunnels/:id/start</code></td><td>所有者</td><td>启动隧道；启动前再次校验渠道权限与源站策略；云安全组放行失败时响应附 <code>cloud_warning</code> 但不阻断启动</td></tr>
         <tr><td>POST</td><td><code>/tunnels/:id/stop</code></td><td>所有者</td><td>停止隧道</td></tr>
+        <tr><td>POST</td><td><code>/tunnels/:id/auto-start</code></td><td>所有者</td><td>设置开机自启：请求 <code>{ auto_start: true|false }</code>；后端服务启动时自动拉起所有标记自启且渠道已启用的隧道，与隧道当前运行状态无关</td></tr>
         <tr><td>GET</td><td><code>/tunnels/:id/log</code></td><td>所有者</td><td>获取隧道进程日志末尾（<code>{ log }</code>）</td></tr>
         <tr><td>POST</td><td><code>/tunnels/:id/test/source</code></td><td>所有者</td><td>源站连通性测试（TCP 探测 + 时延）</td></tr>
         <tr><td>POST</td><td><code>/tunnels/:id/test/public</code></td><td>所有者</td><td>穿透后公网端连通性测试（含时延）</td></tr>
