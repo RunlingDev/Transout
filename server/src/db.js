@@ -86,6 +86,7 @@ function addColumn(table, ddl) {
 addColumn('users', 'email TEXT');
 addColumn('users', "source_policy_combine TEXT NOT NULL DEFAULT 'union'");
 addColumn('tunnels', 'public_url TEXT');
+addColumn('tunnels', 'auto_start INTEGER NOT NULL DEFAULT 0');
 
 // 迁移：把 users.group_id 的既有归属写入 user_groups（多组成员表）
 db.prepare('INSERT OR IGNORE INTO user_groups (user_id, group_id) SELECT id, group_id FROM users').run();

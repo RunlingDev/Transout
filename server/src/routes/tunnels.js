@@ -242,6 +242,16 @@ router.post('/:id/stop', (req, res) => {
   res.json(getView(t.id));
 });
 
+// 设置开机自启（后端服务启动时自动拉起该隧道），与隧道当前运行状态无关
+router.post('/:id/auto-start', (req, res) => {
+  const t = db.prepare('SELECT * FROM tunnels WHERE id = ?').get(Number(req.params.id));
+  if (!t) return res.status(404).json({ error: '隧道不存在' });
+  if (!canManage(req.user, t)) return res.status(403).json({ error: '只能操作自己的隧道' });
+  const on = !!(req.body || {}).auto_start;
+  db.prepare('UPDATE tunnels SET auto_start = ? WHERE id = ?').run(on ? 1 : 0, t.id);
+  res.json(getView(t.id));
+});
+
 // 隧道详情（所有者或管理员）
 router.get('/:id', (req, res) => {
   const t = getView(Number(req.params.id));
