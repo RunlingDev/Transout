@@ -5,6 +5,20 @@ const routes = [
   { path: '/', name: 'home', component: () => import('../views/Home.vue'), meta: { public: true } },
   { path: '/login', name: 'login', component: () => import('../views/Login.vue'), meta: { public: true } },
   {
+    path: '/docs',
+    component: () => import('../layouts/DocsLayout.vue'),
+    meta: { public: true },
+    redirect: '/docs/intro',
+    children: [
+      { path: 'intro', name: 'doc-intro', component: () => import('../views/docs/Intro.vue') },
+      { path: 'quickstart', name: 'doc-quickstart', component: () => import('../views/docs/QuickStart.vue') },
+      { path: 'deploy', name: 'doc-deploy', component: () => import('../views/docs/Deploy.vue') },
+      { path: 'guide', name: 'doc-guide', component: () => import('../views/docs/Guide.vue') },
+      { path: 'api', name: 'doc-api', component: () => import('../views/docs/Api.vue') },
+      { path: 'faq', name: 'doc-faq', component: () => import('../views/docs/Faq.vue') }
+    ]
+  },
+  {
     path: '/console',
     component: () => import('../layouts/MainLayout.vue'),
     children: [
