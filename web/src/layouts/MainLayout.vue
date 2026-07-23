@@ -1,5 +1,5 @@
 <template>
-  <n-layout has-sider style="min-height: 100vh">
+  <n-layout has-sider style="height: 100vh">
     <n-layout-sider
       v-if="!isMobile"
       bordered
@@ -11,7 +11,7 @@
       <SiderContent :active-key="activeKey" :menu-options="menuOptions" @select="onSelect" />
       <div class="sider-resizer" @mousedown="startResize" />
     </n-layout-sider>
-    <n-layout>
+    <n-layout class="main-col">
       <n-layout-header bordered class="header">
         <div class="header-left">
           <n-button v-if="isMobile" quaternary class="menu-btn" aria-label="菜单" @click="drawerVisible = true">
@@ -200,7 +200,13 @@ body.rt-resizing .sider-resizer {
 .username {
   font-size: 14px;
 }
+.main-col {
+  /* 高度锁死在视口内：header 固定，仅内容区内部滚动 */
+  height: 100%;
+}
 .content {
+  flex: 1;
+  min-height: 0;
   padding: 28px 32px;
 }
 

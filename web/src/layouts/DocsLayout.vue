@@ -1,5 +1,5 @@
 <template>
-  <n-layout has-sider style="min-height: 100vh">
+  <n-layout has-sider style="height: 100vh">
     <n-layout-sider
       v-if="!isMobile"
       bordered
@@ -10,7 +10,7 @@
       <div class="docs-brand" @click="goHome">Transout 文档</div>
       <n-menu :value="activeKey" :options="menuOptions" @update:value="onSelect" />
     </n-layout-sider>
-    <n-layout>
+    <n-layout class="main-col">
       <n-layout-header bordered class="header">
         <div class="header-left">
           <n-button v-if="isMobile" quaternary class="menu-btn" aria-label="菜单" @click="drawerVisible = true">
@@ -135,7 +135,13 @@ function goConsole() {
   align-items: center;
   gap: 8px;
 }
+.main-col {
+  /* 高度锁死在视口内：header 固定，仅文档正文内部滚动 */
+  height: 100%;
+}
 .content {
+  flex: 1;
+  min-height: 0;
   padding: 28px 32px;
 }
 .doc-wrap {
