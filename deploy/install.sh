@@ -1,38 +1,48 @@
 #!/usr/bin/env bash
 # Transout 一键部署/升级脚本：构建前端、安装后端、生成 nginx 配置、注册并启用 systemd 服务
-# 检测到已有安装（--app-dir 下存在后端代码）时自动进入升级模式：更新代码与依赖、保留数据、重启服务
-# 一行安装（无需预先克隆仓库，脚本会自动拉取源码；依赖缺失会询问后自动安装）：
+#
+# 一行安装（无需预先克隆仓库，脚本自动拉取源码；依赖缺失会询问后自动安装）：
 #   curl -fsSL https://github.com/RunlingDev/Transout/raw/refs/heads/main/deploy/install.sh | sudo bash
 # 常规用法（在仓库根目录执行）：
 #   sudo bash deploy/install.sh                      # 安装或升级自动判定
 #   sudo bash deploy/install.sh --domain example.com --port 8080
 #   sudo bash deploy/install.sh --skip-nginx         # 只装后端 + systemd
+#
 # 参数：
 #   --app-dir DIR     后端安装目录（默认 /opt/transout）
 #   --web-root DIR    前端静态产物目录（默认 /var/www/transout）
 #   --repo-dir DIR    一行安装时仓库克隆位置（默认 /opt/transout-repo）
-#   --port N          nginx 监听端口（默认 80；后端端口固定 7321，由 nginx 反代）
+#   --port N          nginx 监听端口（默认 80；后端端口见下，由 nginx 反代）
 #   --domain NAME     nginx server_name（默认 _ 即默认站点）
 #   --user NAME       运行后端的系统用户（默认 sudo 调用者，否则 transout）
 #   -y, --yes         依赖缺失时不再询问，自动安装
-#   --skip-nginx      不生成/重载 nginx 配置
+#   --skip-nginx      不安装/配置 nginx
 #   --skip-systemd    不注册 systemd 服务
+#
+# 行为说明：
+#   - 检测到 --app-dir 下已有后端代码时进入升级模式：更新代码与依赖、保留 data/、
+#     保留已有 systemd 单元与 nginx 配置、重启服务。
+#   - 已有 systemd 单元时，以其 User= 与 Environment=PORT= 为运行时真相：
+#     数据目录属主跟随单元用户（避免 EACCES），nginx 反代跟随单元端口；
+#     保留的 nginx 配置反代端口与后端真实端口不一致时自动重写配置。
+#   - 后端固定绑 127.0.0.1，端口默认 7321（以现有单元为准），由 nginx 反代对外。
 set -euo pipefail
 
 # ---------- 参数 ----------
-APP_DIR=/opt/transout          # 后端安装目录
-WEB_ROOT=/var/www/transout     # 前端静态产物目录
+APP_DIR=/opt/transout              # 后端安装目录
+WEB_ROOT=/var/www/transout         # 前端静态产物目录
 REPO_CLONE_DIR=/opt/transout-repo  # 一行安装模式下仓库克隆位置
-BACKEND_PORT=7321              # 后端监听端口（固定默认，绑 127.0.0.1，由 nginx 反代）
-PORT=80                        # nginx 监听端口
-DOMAIN=_                       # nginx server_name，_ 表示默认站点
-RUN_USER=${SUDO_USER:-transout}
+BACKEND_PORT=7321                  # 后端端口默认值（已有单元时以单元 PORT= 为准）
+PORT=80                            # nginx 监听端口
+DOMAIN=_                           # nginx server_name，_ 表示默认站点
+RUN_USER=${SUDO_USER:-transout}    # 后端运行用户（已有单元时以单元 User= 为准）
 SKIP_NGINX=0
 SKIP_SYSTEMD=0
 ASSUME_YES=0
-NGINX_EXPLICIT=0               # 用户是否显式指定了 --domain/--port（升级模式下据此决定是否重写 nginx 配置）
+NGINX_EXPLICIT=0                   # 用户显式指定了 --domain/--port 时重写 nginx 配置
 GITHUB_REPO=https://github.com/RunlingDev/Transout
-FRP_VERSION=0.61.0             # 自动安装 frpc 时使用的 frp 版本
+FRP_VERSION=0.61.0                 # 自动安装 frpc 时使用的 frp 版本
+UNIT=/etc/systemd/system/transout.service
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -46,7 +56,7 @@ while [ $# -gt 0 ]; do
     --skip-nginx)    SKIP_NGINX=1; shift;;
     --skip-systemd)  SKIP_SYSTEMD=1; shift;;
     -h|--help)
-      sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
+      awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0;;
     *) echo "未知参数: $1" >&2; exit 1;;
   esac
 done
@@ -127,17 +137,28 @@ ensure_cmd npm npm "npm"
 NODE_MAJOR=$(node -v 2>/dev/null | sed 's/^v//; s/\..*$//')
 [ "${NODE_MAJOR:-0}" -ge 18 ] 2>/dev/null || die "Node.js 版本过低（$(node -v)，需要 >= 18），建议通过 NodeSource 安装新版后重试"
 NODE_BIN=$(command -v node)
-id "$RUN_USER" >/dev/null 2>&1 || die "用户 $RUN_USER 不存在，请用 --user 指定"
 
 # ---------- 安装 / 升级模式判定 ----------
-# 已存在后端代码即视为升级：保留 data/ 与已有 nginx、systemd 配置（除非显式要求重写）
 UPGRADE=0
 [ -f "$APP_DIR/src/index.js" ] && UPGRADE=1
-if [ "$UPGRADE" -eq 1 ]; then
-  log "检测到已有安装（$APP_DIR），进入升级模式"
-else
-  log "全新安装到 $APP_DIR"
+[ "$UPGRADE" -eq 1 ] && log "检测到已有安装（$APP_DIR），进入升级模式" || log "全新安装到 $APP_DIR"
+
+# ---------- 运行时真相：已有 systemd 单元时以其 User= / PORT= 为准 ----------
+# 升级模式不重写单元，chown 的目标用户与 nginx 反代端口必须跟随单元里的实际配置，
+# 否则会出现服务用户与数据目录属主不一致（EACCES）或 nginx 反代到错误端口（502）
+if [ -f "$UNIT" ]; then
+  UNIT_USER=$(sed -n 's/^User=\([^[:space:]]\{1,\}\).*$/\1/p' "$UNIT" | head -n 1)
+  if [ -n "$UNIT_USER" ] && [ "$UNIT_USER" != "$RUN_USER" ]; then
+    log "以现有单元的运行用户为准：$UNIT_USER（忽略 --user $RUN_USER）"
+    RUN_USER=$UNIT_USER
+  fi
+  UNIT_PORT=$(sed -n 's/^Environment=PORT=\([0-9]\{1,\}\).*$/\1/p' "$UNIT" | head -n 1)
+  if [ -n "$UNIT_PORT" ] && [ "$UNIT_PORT" != "$BACKEND_PORT" ]; then
+    log "以现有单元的后端端口为准：$UNIT_PORT（nginx 反代将使用该端口）"
+    BACKEND_PORT=$UNIT_PORT
+  fi
 fi
+id "$RUN_USER" >/dev/null 2>&1 || die "用户 $RUN_USER 不存在（请检查 --user 参数或现有 systemd 单元的 User= 配置）"
 
 # ---------- 构建前端 ----------
 log "安装依赖并构建前端"
@@ -150,7 +171,7 @@ log "安装后端到 $APP_DIR"
 mkdir -p "$APP_DIR" "$WEB_ROOT"
 rsync -a --delete --exclude data "$REPO_DIR/server/src" "$REPO_DIR/server/package.json" "$REPO_DIR/server/package-lock.json" "$APP_DIR/"
 cd "$APP_DIR"
-# 依赖随 package-lock.json 变化而更新（npm install 在锁文件一致时很快，直接跑即可）
+# 依赖随 package-lock.json 变化而更新（锁文件一致时 npm install 很快，直接跑即可）
 npm install --omit=dev
 mkdir -p "$APP_DIR/data"
 chown -R "$RUN_USER:$RUN_USER" "$APP_DIR"
@@ -160,11 +181,10 @@ log "部署前端产物到 $WEB_ROOT"
 rsync -a --delete "$REPO_DIR/web/dist/" "$WEB_ROOT/"
 
 # ---------- systemd ----------
-UNIT=/etc/systemd/system/transout.service
 if [ "$SKIP_SYSTEMD" -eq 0 ]; then
   # 升级模式且单元已存在：不重写（保留用户可能的本地改动），只重启
   if [ "$UPGRADE" -eq 0 ] || [ ! -f "$UNIT" ]; then
-    log "写入 systemd 单元 transout.service 并启用"
+    log "写入 systemd 单元 transout.service（用户 $RUN_USER，后端 127.0.0.1:$BACKEND_PORT）并启用"
     cat > "$UNIT" <<EOF
 [Unit]
 Description=Transout 内网穿透控制面板后端
@@ -204,11 +224,18 @@ if [ "$SKIP_NGINX" -eq 0 ]; then
     CONF=/etc/nginx/conf.d/transout.conf
     LINK=
   fi
-  # 升级模式且配置已存在、用户未显式指定 --domain/--port：保留现有配置
+  # 升级模式、配置已存在、未显式指定 --domain/--port：保留现有配置；
+  # 但已有配置的反代端口与后端真实端口不一致时必须重写，否则站点 502
   if [ "$UPGRADE" -eq 1 ] && [ -f "$CONF" ] && [ "$NGINX_EXPLICIT" -eq 0 ]; then
-    NGINX_PRESERVED=1
-    log "保留已有 nginx 配置 $CONF（如需重写请显式指定 --domain 或 --port）"
-  else
+    EXISTING_PROXY_PORT=$(sed -n 's|^[[:space:]]*proxy_pass http://127\.0\.0\.1:\([0-9]\{1,\}\).*|\1|p' "$CONF" | head -n 1)
+    if [ -n "$EXISTING_PROXY_PORT" ] && [ "$EXISTING_PROXY_PORT" != "$BACKEND_PORT" ]; then
+      log "已有 nginx 配置反代端口（$EXISTING_PROXY_PORT）与后端真实端口（$BACKEND_PORT）不一致，重写配置"
+    else
+      NGINX_PRESERVED=1
+      log "保留已有 nginx 配置 $CONF（如需重写请显式指定 --domain 或 --port）"
+    fi
+  fi
+  if [ "$NGINX_PRESERVED" -eq 0 ]; then
     log "生成 nginx 配置 $CONF（监听 :$PORT，反代后端 127.0.0.1:$BACKEND_PORT）"
     cat > "$CONF" <<EOF
 # Transout 前端站点 + API 反代（由 deploy/install.sh 生成）
@@ -277,6 +304,7 @@ if ! command -v ngrok >/dev/null; then
   fi
 fi
 
+# ---------- 完成摘要 ----------
 log "$([ "$UPGRADE" -eq 1 ] && echo 升级 || echo 部署)完成"
 echo "  后端: 127.0.0.1:$BACKEND_PORT (systemd: transout.service, 用户 $RUN_USER)"
 if [ "$SKIP_NGINX" -eq 0 ]; then

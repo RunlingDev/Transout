@@ -50,6 +50,11 @@ sudo bash deploy/install.sh --skip-nginx         # 只装后端 + systemd</code>
     </p>
     <pre><code>git pull && sudo bash deploy/install.sh                       # 一键升级（保留全部现有配置）
 git pull && sudo bash deploy/install.sh --port 8080           # 升级并重写 nginx 监听端口</code></pre>
+    <p>
+      已有 systemd 单元时，脚本以单元中的 <code>User=</code> 与 <code>Environment=PORT=</code> 为运行时真相：
+      数据目录属主跟随单元用户（避免 EACCES），nginx 反代端口跟随单元端口；
+      若保留的 nginx 配置反代端口与后端真实端口不一致，会自动重写配置。
+    </p>
 
     <h2>手动部署</h2>
     <pre><code>make start                        # 构建前端并后台启动后端（127.0.0.1:7321）

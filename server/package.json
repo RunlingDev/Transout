@@ -1,6 +1,6 @@
 {
   "name": "transout-server",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "private": true,
   "description": "Transout 内网穿透控制面板后端",
   "main": "src/index.js",
