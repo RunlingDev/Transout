@@ -19,7 +19,7 @@ sudo bash deploy/install.sh --skip-nginx         # 只装后端 + systemd</code>
       <tbody>
         <tr><td><code>--app-dir</code></td><td><code>/opt/transout</code></td><td>后端安装目录</td></tr>
         <tr><td><code>--web-root</code></td><td><code>/var/www/transout</code></td><td>前端静态产物目录</td></tr>
-        <tr><td><code>--port</code></td><td><code>7321</code></td><td>后端监听端口（绑 127.0.0.1，由 nginx 反代）</td></tr>
+        <tr><td><code>--port</code></td><td><code>80</code></td><td>nginx 监听端口；后端端口固定 7321（绑 127.0.0.1），由 nginx 反代</td></tr>
         <tr><td><code>--domain</code></td><td><code>_</code></td><td>nginx server_name，<code>_</code> 表示默认站点</td></tr>
         <tr><td><code>--user</code></td><td><code>$SUDO_USER</code>（否则 <code>transout</code>）</td><td>systemd 服务运行用户，须已存在</td></tr>
         <tr><td><code>--skip-nginx</code></td><td>—</td><td>跳过 nginx 配置生成，只装后端 + systemd</td></tr>
@@ -27,6 +27,16 @@ sudo bash deploy/install.sh --skip-nginx         # 只装后端 + systemd</code>
       </tbody>
     </table>
     <p>前置要求：已安装 node、npm（配置 nginx 时还需 nginx）。部署完成后首次访问请创建管理员账号。</p>
+
+    <h3>一键升级</h3>
+    <p>
+      脚本会检测 <code>--app-dir</code> 下是否已有后端代码：有则自动进入<strong>升级模式</strong>——
+      拉取新代码构建、更新后端与前端产物、按 package-lock.json 变化更新依赖、重启服务；
+      <strong>不触碰</strong>数据目录（<code>data/</code>）、已存在的 systemd 单元与 nginx 配置。
+      升级时如需重写 nginx 配置（换域名/端口），显式再传一次 <code>--domain</code> 或 <code>--port</code> 即可：
+    </p>
+    <pre><code>git pull && sudo bash deploy/install.sh                       # 一键升级（保留全部现有配置）
+git pull && sudo bash deploy/install.sh --port 8080           # 升级并重写 nginx 监听端口</code></pre>
 
     <h2>手动部署</h2>
     <pre><code>make start                        # 构建前端并后台启动后端（127.0.0.1:7321）
@@ -74,7 +84,7 @@ make status    # 查看运行状态</code></pre>
     <p>
       后端常驻推荐用 systemd 托管（<code>deploy/transout.service.example</code>，一键部署会自动生成）。
       关键配置：<code>User</code> 指定运行用户，<code>WorkingDirectory</code> 指向后端安装目录，
-      环境变量 <code>PORT</code>（监听端口）与 <code>DATA_DIR</code>（数据目录），
+      环境变量 <code>HOST</code>（绑 <code>127.0.0.1</code>，仅 nginx 反代可达）、<code>PORT</code>（后端端口 7321）与 <code>DATA_DIR</code>（数据目录），
       <code>Restart=on-failure</code> 保证异常退出后自动拉起。日志查看：
     </p>
     <pre><code>journalctl -u transout -f</code></pre>

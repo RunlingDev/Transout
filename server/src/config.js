@@ -1,4 +1,4 @@
-// 全局配置：端口、数据目录、JWT 密钥
+// 全局配置：监听地址、端口、数据目录、JWT 密钥
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -19,6 +19,7 @@ function loadSecret() {
 }
 
 module.exports = {
+  HOST: process.env.HOST || '0.0.0.0',
   PORT: parseInt(process.env.PORT || '7321', 10),
   DATA_DIR,
   JWT_SECRET: loadSecret(),

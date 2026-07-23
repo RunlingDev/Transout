@@ -11,7 +11,9 @@ After=network.target
 Type=simple
 User=transout
 WorkingDirectory=/opt/transout/server
+Environment=HOST=127.0.0.1
 Environment=PORT=7321
+Environment=DATA_DIR=/opt/transout/server/data
 ExecStart=/usr/bin/node src/index.js
 Restart=on-failure
 RestartSec=3
