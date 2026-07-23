@@ -1,7 +1,7 @@
 // 服务入口：初始化数据库、清理孤儿状态、挂载路由、监听端口
 const express = require('express');
 const cors = require('cors');
-const { PORT } = require('./config');
+const { HOST, PORT } = require('./config');
 require('./db'); // 引入即完成建表与内置数据
 const runner = require('./services/runner');
 
@@ -37,6 +37,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: '服务器内部错误' });
 });
 
-app.listen(PORT, () => {
-  console.log(`transout-server 已启动，监听端口 ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`transout-server 已启动，监听 ${HOST}:${PORT}`);
 });
