@@ -25,6 +25,21 @@
       渠道可配置授权列表（见下文「渠道授权」）。删除渠道会先停止其下运行中的隧道，
       并一并删除隧道与授权记录，不可恢复。
     </p>
+    <h3>云安全组绑定</h3>
+    <p>
+      frp 渠道可在表单中绑定<strong>阿里云 ECS 或腾讯云 CVM 实例的安全组</strong>（可选），
+      填写云厂商、地域 <code>regionId</code>、安全组 ID 与 AccessKey 凭据。
+      <code>accessKeySecret</code> 与 token 一样脱敏回显（<code>********</code>），
+      编辑时保持掩码或留空即保留原值。
+    </p>
+    <p>
+      绑定后，frp <code>tcp</code> 隧道在<strong>创建与启动</strong>时自动向安全组放行
+      <code>remote_port</code>（入方向 TCP / 指定端口 / <code>0.0.0.0/0</code> / 允许，幂等）；
+      <strong>删除</strong>隧道时自动移除对应规则——若同渠道其他隧道仍占用该端口则保留。
+      云 API 调用失败<strong>不阻断</strong>隧道操作：创建/启动照常成功，仅在响应中附带
+      <code>cloud_warning</code> 说明原因（删除失败则仅记录服务端日志）。
+      <code>http</code>/<code>https</code> 隧道与 ngrok 渠道不参与安全组联动。
+    </p>
 
     <h2>隧道管理</h2>
     <p>隧道在「隧道」页创建与管理。每条隧道包含：</p>
@@ -53,6 +68,24 @@
       <strong>源站测试</strong>对源站 <code>host:port</code> 做 TCP 探测，
       <strong>公网测试</strong>探测穿透后的公网端，两者均返回连通结果与时延。
     </p>
+    <h3>从 frpc 配置导入</h3>
+    <p>
+      隧道页的「导入」按钮支持直接粘贴 frpc 配置文件全文批量创建隧道，
+      <code>ini</code>（<code>[common]</code> + 各隧道段）与 <code>toml</code>
+      （<code>[[proxies]]</code>）两种格式自动识别，仅支持
+      <code>tcp</code>/<code>http</code>/<code>https</code> 协议条目。
+    </p>
+    <ul>
+      <li><strong>渠道匹配</strong>：按配置中的 <code>serverAddr</code> 精确匹配 frp 渠道，
+        匹配不到时所有条目导入失败并注明原因；</li>
+      <li><strong>逐条处理</strong>：每条隧道独立创建，响应中逐条返回成功（含隧道 ID）或失败原因，
+        单条失败不影响其他条目；</li>
+      <li><strong>同名去重</strong>：与当前用户已有隧道同名的条目会被跳过并提示「同名隧道已存在」；</li>
+      <li><strong>字段映射</strong>：<code>local_ip/localIP → source_host</code>、
+        <code>local_port → source_port</code>、<code>remote_port → remote_port</code>、
+        <code>subdomain → subdomain</code>、<code>custom_domains 第一个值 → domain</code>，
+        创建时同样会校验渠道权限与源站策略。</li>
+    </ul>
 
     <h2>用户与用户组（管理员）</h2>
     <ul>

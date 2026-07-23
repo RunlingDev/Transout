@@ -79,6 +79,25 @@
         <tr><td>POST</td><td><code>/channels/:id/check</code></td><td>管理员</td><td>检测对应二进制可用性（frp 执行 <code>frpc -v</code>，ngrok 执行 <code>ngrok version</code>），返回 <code>{ ok, version }</code> 或 <code>{ ok: false, error }</code></td></tr>
       </tbody>
     </table>
+    <p>
+      frp 渠道的 <code>config</code> 可选 <code>cloud</code> 字段，用于绑定云安全组（tcp 隧道自动放行/移除端口规则）：
+    </p>
+    <table>
+      <thead>
+        <tr><th>字段</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>provider</code></td><td>云厂商：<code>aliyun</code>（阿里云 ECS）或 <code>tencent</code>（腾讯云 CVM）</td></tr>
+        <tr><td><code>regionId</code></td><td>地域，如 <code>cn-hangzhou</code> / <code>ap-guangzhou</code></td></tr>
+        <tr><td><code>securityGroupId</code></td><td>安全组 ID，如 <code>sg-xxx</code></td></tr>
+        <tr><td><code>accessKeyId</code> / <code>accessKeySecret</code></td><td>云 API 凭据</td></tr>
+        <tr><td><code>instanceId</code></td><td>实例 ID，仅记录展示，可选</td></tr>
+      </tbody>
+    </table>
+    <p>
+      <code>cloud.accessKeySecret</code> 与 token/authtoken 遵循同样的掩码约定：GET 回显
+      <code>********</code>（有值）或空串；PUT 时传 <code>********</code> 或不传该字段均表示保留原值。
+    </p>
 
     <h2>隧道 <code>/api/tunnels</code></h2>
     <table>
@@ -87,17 +106,25 @@
       </thead>
       <tbody>
         <tr><td>GET</td><td><code>/tunnels</code></td><td>登录</td><td>隧道列表：管理员返回全部，普通用户仅返回自己的</td></tr>
-        <tr><td>POST</td><td><code>/tunnels</code></td><td>登录</td><td>创建隧道：校验渠道权限与源站策略；frp TCP 需 <code>remote_port</code>，frp HTTP/HTTPS 需 <code>subdomain</code> 或 <code>domain</code></td></tr>
+        <tr><td>POST</td><td><code>/tunnels</code></td><td>登录</td><td>创建隧道：校验渠道权限与源站策略；frp TCP 需 <code>remote_port</code>，frp HTTP/HTTPS 需 <code>subdomain</code> 或 <code>domain</code>；云安全组放行失败时响应附 <code>cloud_warning</code> 但仍创建成功</td></tr>
+        <tr><td>POST</td><td><code>/tunnels/import</code></td><td>登录</td><td>从 frpc 配置（ini/toml 自动识别）批量导入隧道：请求 <code>{ content }</code> 为配置全文，按其中 <code>serverAddr</code> 精确匹配 frp 渠道；响应 <code>{ matched_channel, results[] }</code>，<code>results</code> 逐条给出 <code>{ name, success, tunnel_id }</code> 或 <code>{ name, success: false, error }</code>；与当前用户同名的隧道跳过</td></tr>
         <tr><td>GET</td><td><code>/tunnels/:id</code></td><td>所有者</td><td>隧道详情（含渠道名、所有者名、状态、last_error、公网地址等）</td></tr>
         <tr><td>PUT</td><td><code>/tunnels/:id</code></td><td>所有者</td><td>修改隧道；running/starting 状态禁止修改，error 状态允许</td></tr>
         <tr><td>DELETE</td><td><code>/tunnels/:id</code></td><td>所有者</td><td>删除隧道（运行中先停止）</td></tr>
-        <tr><td>POST</td><td><code>/tunnels/:id/start</code></td><td>所有者</td><td>启动隧道；启动前再次校验渠道权限与源站策略</td></tr>
+        <tr><td>POST</td><td><code>/tunnels/:id/start</code></td><td>所有者</td><td>启动隧道；启动前再次校验渠道权限与源站策略；云安全组放行失败时响应附 <code>cloud_warning</code> 但不阻断启动</td></tr>
         <tr><td>POST</td><td><code>/tunnels/:id/stop</code></td><td>所有者</td><td>停止隧道</td></tr>
         <tr><td>GET</td><td><code>/tunnels/:id/log</code></td><td>所有者</td><td>获取隧道进程日志末尾（<code>{ log }</code>）</td></tr>
         <tr><td>POST</td><td><code>/tunnels/:id/test/source</code></td><td>所有者</td><td>源站连通性测试（TCP 探测 + 时延）</td></tr>
         <tr><td>POST</td><td><code>/tunnels/:id/test/public</code></td><td>所有者</td><td>穿透后公网端连通性测试（含时延）</td></tr>
       </tbody>
     </table>
+    <p>
+      <strong>云安全组联动（<code>cloud_warning</code>）</strong>：frp 渠道绑定 <code>config.cloud</code> 时，
+      <code>tcp</code> 隧道创建/启动会自动放行 <code>remote_port</code>，删除时移除对应规则
+      （同渠道其他隧道仍占用该端口则保留，移除失败仅记录服务端日志）。
+      放行失败不阻断创建/启动，响应体中附加 <code>cloud_warning</code> 字段说明失败原因；
+      无该字段表示放行成功或未绑定安全组。<code>http</code>/<code>https</code> 与 ngrok 隧道不参与联动。
+    </p>
 
     <h2>设置 <code>/api/settings</code></h2>
     <table>
