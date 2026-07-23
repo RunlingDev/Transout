@@ -9,6 +9,14 @@
         <div class="desc">隧道详情与连通性测试</div>
       </div>
       <n-space align="center">
+        <n-switch
+          :value="tunnel.status === 'running' || tunnel.status === 'starting'"
+          @update:value="toggle"
+        >
+          <template #checked>运行中</template>
+          <template #unchecked>已停止</template>
+        </n-switch>
+        <n-divider vertical />
         <n-space align="center" :size="6">
           <span class="auto-start-label">自启</span>
           <n-switch size="small" :value="!!tunnel.auto_start" @update:value="toggleAutoStart" />
@@ -20,13 +28,6 @@
           </template>
           确定删除该隧道？
         </n-popconfirm>
-        <n-switch
-          :value="tunnel.status === 'running' || tunnel.status === 'starting'"
-          @update:value="toggle"
-        >
-          <template #checked>运行中</template>
-          <template #unchecked>已停止</template>
-        </n-switch>
       </n-space>
     </div>
 
