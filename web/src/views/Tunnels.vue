@@ -41,16 +41,19 @@
 <script setup>
 import { computed, h, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NPopconfirm, NPopover, NSpace, NSwitch, NTag, NText, useDialog, useMessage } from 'naive-ui'
+import { NAvatar, NButton, NPopconfirm, NPopover, NSpace, NSwitch, NTag, NText, useDialog, useMessage } from 'naive-ui'
 import api from '../api'
 import ResponsiveTable from '../components/ResponsiveTable.vue'
 import StatusDot from '../components/StatusDot.vue'
 import TunnelForm from '../components/TunnelForm.vue'
 import TunnelImportDialog from '../components/TunnelImportDialog.vue'
+import { avatarUrl } from '../utils/avatar'
+import { useIsMobile } from '../utils/responsive'
 
 const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
+const isMobile = useIsMobile()
 
 const tunnels = ref([])
 const channels = ref([])
@@ -99,25 +102,90 @@ async function toggleTunnel(row, val) {
   await load()
 }
 
-// 开机自启开关：与隧道当前运行状态无关，静默刷新即可
-async function toggleAutoStart(row, val) {
-  try {
-    await api.post(`/tunnels/${row.id}/auto-start`, { auto_start: val })
-    message.success(val ? `「${row.name}」将随服务启动自动拉起` : `已取消「${row.name}」的开机自启`)
-  } catch {
-    // 拦截器已提示
-  }
-  await load(true)
+// 名称字体颜色标识状态（与 StatusDot 同色系）；stopped 用主题主色
+const statusColors = { running: '#34C759', starting: '#FF9500', error: '#FF3B30' }
+
+function goDetail(row) {
+  router.push({ name: 'tunnel-detail', params: { id: row.id } })
 }
 
-const columns = [
+// 异常说明（查看错误 popover），桌面合并进名称列、移动端放在状态列
+function errorHint(row) {
+  if (row.status !== 'error' || !row.last_error) return null
+  return h(
+    NPopover,
+    { trigger: 'click', style: 'max-width: 360px' },
+    {
+      trigger: () =>
+        h(
+          NText,
+          { depth: 3, style: 'font-size: 12px; cursor: pointer; text-decoration: underline dotted' },
+          { default: () => '查看错误' }
+        ),
+      default: () => row.last_error
+    }
+  )
+}
+
+const enabledCol = {
+  title: '启用',
+  key: 'enabled',
+  width: 70,
+  render: (row) =>
+    h(NSwitch, {
+      size: 'small',
+      value: row.status === 'running' || row.status === 'starting',
+      onUpdateValue: (val) => toggleTunnel(row, val)
+    })
+}
+
+// 桌面端：名称列合并 头像（所有者）+ 名称（颜色表状态）+ 协议标签 + 异常说明
+const desktopColumns = [
+  {
+    title: '名称',
+    key: 'name',
+    render: (row) =>
+      h('div', { style: 'display: inline-flex; align-items: center; gap: 8px' }, [
+        h(
+          NAvatar,
+          { round: true, size: 'small', src: avatarUrl(row.owner_email, 48), title: row.owner_name || '' },
+          { default: () => (row.owner_name || '?').slice(0, 1).toUpperCase() }
+        ),
+        h(
+          'span',
+          {
+            style: `cursor: pointer; font-weight: 500; color: ${statusColors[row.status] || '#007AFF'}`,
+            onClick: () => goDetail(row)
+          },
+          row.name
+        ),
+        h(NTag, { size: 'tiny', bordered: false }, { default: () => row.proto.toUpperCase() }),
+        errorHint(row)
+      ])
+  },
+  { title: '渠道', key: 'channel_name' },
+  {
+    title: '源',
+    key: 'source',
+    render: (row) => `${row.source_host}:${row.source_port}`
+  },
+  {
+    title: '公网端',
+    key: 'public',
+    render: (row) => publicEndpoint(row)
+  },
+  enabledCol
+]
+
+// 移动端卡片：保持拆分展示，不合并进名称
+const mobileColumns = [
   {
     title: '名称',
     key: 'name',
     render: (row) =>
       h(
         NButton,
-        { text: true, type: 'primary', onClick: () => router.push({ name: 'tunnel-detail', params: { id: row.id } }) },
+        { text: true, type: 'primary', onClick: () => goDetail(row) },
         { default: () => row.name }
       )
   },
@@ -125,8 +193,12 @@ const columns = [
   {
     title: '协议',
     key: 'proto',
-    width: 80,
     render: (row) => h(NTag, { size: 'small', bordered: false }, { default: () => row.proto.toUpperCase() })
+  },
+  {
+    title: '源',
+    key: 'source',
+    render: (row) => `${row.source_host}:${row.source_port}`
   },
   {
     title: '公网端',
@@ -136,52 +208,12 @@ const columns = [
   {
     title: '状态',
     key: 'status',
-    render: (row) =>
-      h('div', null, [
-        h(StatusDot, { status: row.status }),
-        row.status === 'error' && row.last_error
-          ? h(
-              NPopover,
-              { trigger: 'click', style: 'max-width: 360px' },
-              {
-                trigger: () =>
-                  h(
-                    NText,
-                    { depth: 3, style: 'font-size: 12px; cursor: pointer; text-decoration: underline dotted; margin-left: 6px' },
-                    { default: () => '查看错误' }
-                  ),
-                default: () => row.last_error
-              }
-            )
-          : null
-      ])
+    render: (row) => h('div', null, [h(StatusDot, { status: row.status }), errorHint(row)])
   },
-  {
-    title: '启用',
-    key: 'enabled',
-    width: 70,
-    render: (row) =>
-      h(NSwitch, {
-        size: 'small',
-        value: row.status === 'running' || row.status === 'starting',
-        onUpdateValue: (val) => toggleTunnel(row, val)
-      })
-  },
-  {
-    title: '自启',
-    key: 'auto_start',
-    width: 70,
-    render: (row) =>
-      h(NSwitch, {
-        size: 'small',
-        value: !!row.auto_start,
-        onUpdateValue: (val) => toggleAutoStart(row, val)
-      })
-  },
+  enabledCol,
   {
     title: '操作',
     key: 'actions',
-    width: 140,
     render: (row) =>
       h(NSpace, { size: 4 }, {
         default: () => [
@@ -203,6 +235,8 @@ const columns = [
       })
   }
 ]
+
+const columns = computed(() => (isMobile.value ? mobileColumns : desktopColumns))
 
 async function load(silent = false) {
   if (!silent) loading.value = true
